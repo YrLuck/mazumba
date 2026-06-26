@@ -6,12 +6,12 @@ import { login } from '../api/auth'
 import { socket } from '../ws/socket'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
-  const [showPw, setShowPw] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [showPw, setShowPw]   = useState(false)
+  const [error, setError]     = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const { setPage, setUser } = useAppStore()
+  const { setPage, setUser }  = useAppStore()
 
   const handleLogin = async () => {
     if (!email || !password) { setError('Please fill in all fields'); return }
@@ -30,38 +30,69 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }} className="page-bg">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem 2rem', flex: '0 0 auto' }}>
-        <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '1.5rem', padding: '1rem', marginBottom: '1rem', backdropFilter: 'blur(8px)' }}>
+    <div style={{ minHeight: '100vh', minHeight: '100dvh' as string, display: 'flex', flexDirection: 'column' }} className="page-bg">
+      {/* Brand header */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem 2rem' }}>
+        <div
+          className="fade-up"
+          style={{
+            background: 'rgba(255,255,255,0.55)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1rem',
+            marginBottom: '1rem',
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 4px 24px rgba(132,36,123,0.12)',
+          }}
+        >
           <Logo size={56} />
         </div>
-        <h1 style={{ fontSize: '1.7rem', fontWeight: 800, color: 'white', letterSpacing: '-0.5px', textShadow: '0 1px 8px rgba(132,36,123,0.18)' }}>MiZumBA</h1>
-        <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: '0.2rem' }}>Connect. Collaborate. Thrive.</p>
+        <h1
+          className="fade-up"
+          style={{ fontSize: '1.9rem', fontWeight: 800, color: 'white', letterSpacing: '-0.5px', textShadow: '0 2px 12px rgba(132,36,123,0.25)', animationDelay: '0.05s' }}
+        >
+          MiZumBA
+        </h1>
+        <p
+          className="fade-up"
+          style={{ color: 'rgba(255,255,255,0.88)', fontSize: '0.88rem', marginTop: '0.2rem', animationDelay: '0.1s' }}
+        >
+          Connect. Collaborate. Thrive.
+        </p>
       </div>
 
+      {/* Card */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div className="card" style={{ borderRadius: '2rem 2rem 0 0', padding: '2rem 1.5rem', flex: 1 }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1a1a2e', marginBottom: '0.3rem' }}>Welcome back</h2>
-          <p style={{ color: '#999', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Sign in to your account to continue</p>
+        <div
+          className="card fade-up"
+          style={{ borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '2rem 1.5rem', flex: 1, animationDelay: '0.12s' }}
+        >
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', marginBottom: '0.3rem' }}>Welcome back</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Sign in to your account to continue</p>
 
-          {error && (
-            <div style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: '0.75rem', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#c0392b', fontSize: '0.85rem' }}>
-              {error}
-            </div>
-          )}
+          {error && <div className="error-banner" style={{ marginBottom: '1rem' }}>{error}</div>}
 
           <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#444', display: 'block', marginBottom: '0.4rem' }}>Email</label>
           <div style={{ position: 'relative', marginBottom: '1rem' }}>
-            <Mail size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
-            <input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+            <Mail size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input
+              className="input-field"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@mizumba.app"
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              autoComplete="email"
+            />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
             <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#444' }}>Password</label>
-            <button style={{ border: 'none', background: 'none', color: '#84247B', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}>Forgot?</button>
+            <button style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit', opacity: 0.85, transition: 'opacity var(--duration) var(--ease)' }}>
+              Forgot?
+            </button>
           </div>
           <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
-            <Lock size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
+            <Lock size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input
               className="input-field"
               type={showPw ? 'text' : 'password'}
@@ -70,17 +101,25 @@ export default function LoginPage() {
               placeholder="••••••••"
               style={{ paddingRight: '2.75rem' }}
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              autoComplete="current-password"
             />
-            <button onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#aaa' }}>
+            <button
+              onClick={() => setShowPw(!showPw)}
+              style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', transition: 'color var(--duration) var(--ease)' }}
+            >
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
 
-          <button className="btn-primary" onClick={handleLogin} disabled={loading} style={{ opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Signing in…' : 'Sign In'}
+          <button className="btn-primary" onClick={handleLogin} disabled={loading}>
+            {loading ? <span className="spinner" /> : 'Sign In'}
           </button>
 
-          <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.8rem', margin: '1rem 0' }}>or continue with</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0' }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 500 }}>or continue with</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
             <button className="btn-social">
@@ -93,9 +132,14 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#999' }}>
+          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Don't have an account?{' '}
-            <button onClick={() => setPage('register')} style={{ border: 'none', background: 'none', color: '#84247B', fontWeight: 700, cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}>Sign Up</button>
+            <button
+              onClick={() => setPage('register')}
+              style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity var(--duration) var(--ease)' }}
+            >
+              Sign Up
+            </button>
           </p>
         </div>
       </div>
