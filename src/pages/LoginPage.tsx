@@ -1,0 +1,104 @@
+import { useState } from 'react'
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import Logo from '../components/Logo'
+import { useAppStore } from '../store/useAppStore'
+import { login } from '../api/auth'
+import { socket } from '../ws/socket'
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const { setPage, setUser } = useAppStore()
+
+  const handleLogin = async () => {
+    if (!email || !password) { setError('Please fill in all fields'); return }
+    setError(null)
+    setLoading(true)
+    try {
+      const data = await login(email, password)
+      setUser(data.user)
+      socket.connect()
+      setPage('chats')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Login failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }} className="page-bg">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem 2rem', flex: '0 0 auto' }}>
+        <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '1.5rem', padding: '1rem', marginBottom: '1rem', backdropFilter: 'blur(8px)' }}>
+          <Logo size={56} />
+        </div>
+        <h1 style={{ fontSize: '1.7rem', fontWeight: 800, color: 'white', letterSpacing: '-0.5px', textShadow: '0 1px 8px rgba(132,36,123,0.18)' }}>MiZumBA</h1>
+        <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', marginTop: '0.2rem' }}>Connect. Collaborate. Thrive.</p>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ borderRadius: '2rem 2rem 0 0', padding: '2rem 1.5rem', flex: 1 }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1a1a2e', marginBottom: '0.3rem' }}>Welcome back</h2>
+          <p style={{ color: '#999', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Sign in to your account to continue</p>
+
+          {error && (
+            <div style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: '0.75rem', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#c0392b', fontSize: '0.85rem' }}>
+              {error}
+            </div>
+          )}
+
+          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#444', display: 'block', marginBottom: '0.4rem' }}>Email</label>
+          <div style={{ position: 'relative', marginBottom: '1rem' }}>
+            <Mail size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
+            <input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#444' }}>Password</label>
+            <button style={{ border: 'none', background: 'none', color: '#84247B', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}>Forgot?</button>
+          </div>
+          <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+            <Lock size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
+            <input
+              className="input-field"
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={{ paddingRight: '2.75rem' }}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+            />
+            <button onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#aaa' }}>
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+
+          <button className="btn-primary" onClick={handleLogin} disabled={loading} style={{ opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Signing in…' : 'Sign In'}
+          </button>
+
+          <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.8rem', margin: '1rem 0' }}>or continue with</p>
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <button className="btn-social">
+              <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+              Google
+            </button>
+            <button className="btn-social">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><path d="M13.066 0c.072.96-.26 1.92-.856 2.613-.595.692-1.548 1.229-2.478 1.155-.096-.941.302-1.92.87-2.572C11.17.518 12.195.038 13.066 0zM16.92 12.6c-.48 1.056-1.056 2.016-1.92 2.976-.672.768-1.44 1.536-2.496 1.536-.96 0-1.248-.576-2.4-.576-1.152 0-1.536.576-2.4.576-1.056 0-1.824-.768-2.544-1.536C3.6 13.8 2.4 11.472 2.4 9.24c0-3.456 2.208-5.28 4.368-5.28 1.056 0 1.92.576 2.64.576.672 0 1.728-.672 2.976-.672 1.008 0 2.928.48 3.888 2.592C13.344 7.44 12.336 9.84 16.92 12.6z"/></svg>
+              Apple
+            </button>
+          </div>
+
+          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#999' }}>
+            Don't have an account?{' '}
+            <button onClick={() => setPage('register')} style={{ border: 'none', background: 'none', color: '#84247B', fontWeight: 700, cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}>Sign Up</button>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
