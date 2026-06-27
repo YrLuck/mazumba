@@ -100,7 +100,7 @@ function MessageBubble({
     return (
       <div style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', padding: '0.1rem 0' }}>
         <div style={{ padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-sm)', background: 'var(--input-bg)', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-          🗑 {t.deleteMessage}d
+          🗑 {t.deletedMessage}
         </div>
       </div>
     )
@@ -154,7 +154,7 @@ function MessageBubble({
           )}
           {msg.text && <div>{msg.text}</div>}
           <div style={{ fontSize: '0.6rem', textAlign: 'right', marginTop: '0.2rem', opacity: 0.65, display: 'flex', gap: '0.3rem', alignItems: 'center', justifyContent: 'flex-end' }}>
-            {msg.edited_at && <span style={{ fontStyle: 'italic' }}>edited</span>}
+            {msg.edited_at && <span style={{ fontStyle: 'italic' }}>{t.edited}</span>}
             <span>{formatTime(msg.created_at, t)}</span>
             {mine && <CheckCheck size={10} />}
           </div>
@@ -330,7 +330,7 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
           <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }} className="truncate">{chat.title ?? 'Chat'}</div>
           <div style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>
             {typingUserIds.length > 0
-              ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>typing <span className="typing-dots" style={{ display: 'inline-flex' }}>{[0,1,2].map((i) => <span key={i} className="typing-dot" style={{ display: 'inline-block' }} />)}</span></span>
+              ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>{t.typing} <span className="typing-dots" style={{ display: 'inline-flex' }}>{[0,1,2].map((i) => <span key={i} className="typing-dot" style={{ display: 'inline-block' }} />)}</span></span>
               : chat.type === 'group' ? `${chat.members_count} ${t.members}` : t.online
             }
           </div>

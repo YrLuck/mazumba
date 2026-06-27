@@ -39,6 +39,7 @@ export default function PrivacySettingsPage() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
         {!settings ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>{t.loading}</div>
         ) : (
@@ -94,6 +95,7 @@ export default function PrivacySettingsPage() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   )

@@ -101,6 +101,7 @@ export default function ProfilePage() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
         {/* Avatar + info */}
         <div style={{ background: 'var(--surface)', paddingBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)' }}>
           <div style={{ position: 'relative', marginTop: '1.25rem' }}>
@@ -194,6 +195,7 @@ export default function ProfilePage() {
             <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--danger-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><LogOut size={16} color="var(--danger)" /></div>
             {t.logout}
           </button>
+        </div>
         </div>
       </div>
     </div>

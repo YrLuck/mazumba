@@ -161,6 +161,7 @@ export default function ActivityPage() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
         {loading && (
           <div style={{ padding: '1rem' }}>
             {[1,2,3].map((i) => (
@@ -183,6 +184,7 @@ export default function ActivityPage() {
         <Group label={t.today} items={today} />
         <Group label={t.yesterday} items={yesterday} />
         <Group label={t.earlier} items={earlier} />
+        </div>
       </div>
     </div>
   )

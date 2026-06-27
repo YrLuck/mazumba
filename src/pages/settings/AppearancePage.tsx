@@ -37,6 +37,7 @@ export default function AppearancePage() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
 
         {/* Theme */}
         <div style={{ marginBottom: '1rem' }}>
@@ -115,6 +116,7 @@ export default function AppearancePage() {
               </button>
             ))}
           </div>
+        </div>
         </div>
       </div>
     </div>

@@ -47,6 +47,7 @@ export default function BlockedUsersPage() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
         {loading && (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>{t.loading}</div>
         )}
@@ -83,6 +84,7 @@ export default function BlockedUsersPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   )

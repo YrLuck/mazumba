@@ -82,8 +82,8 @@ export default function App() {
   /* ── Auth pages ─────────────────────────────────────────────── */
   if (isAuthPage) {
     return (
-      <div style={{ minHeight: '100vh', minHeight: '100dvh' as string }}>
-        <div key={page} className="page-enter">
+      <div style={{ height: '100vh', height: '100dvh' as string, display: 'flex', flexDirection: 'column' }}>
+        <div key={page} className="page-enter" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <PageRenderer page={page} />
         </div>
       </div>

@@ -32,7 +32,7 @@ export default function CreateChatModal({ onClose, defaultMode = 'group' }: Prop
       }
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create')
+      setError(e instanceof Error ? e.message : t.createFailed)
     } finally {
       setLoading(false)
     }
