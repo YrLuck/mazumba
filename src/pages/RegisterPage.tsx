@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAppStore } from '../store/useAppStore'
+import { useSettingsStore } from '../store/useSettingsStore'
 import { register } from '../api/auth'
 import { socket } from '../ws/socket'
 
@@ -14,10 +15,11 @@ export default function RegisterPage() {
   const [error, setError]           = useState<string | null>(null)
   const [loading, setLoading]       = useState(false)
   const { setPage, setUser }        = useAppStore()
+  const { t }                       = useSettingsStore()
 
   const handleRegister = async () => {
-    if (!email || !password || !displayName) { setError('Please fill in all required fields'); return }
-    if (password.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (!email || !password || !displayName) { setError(t.allRequired); return }
+    if (password.length < 8) { setError(t.minChars); return }
     setError(null)
     setLoading(true)
     try {
@@ -26,7 +28,7 @@ export default function RegisterPage() {
       socket.connect()
       setPage('chats')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Registration failed')
+      setError(e instanceof Error ? e.message : t.registerFailed)
     } finally {
       setLoading(false)
     }
@@ -39,20 +41,12 @@ export default function RegisterPage() {
     opts: { icon: React.ReactNode; type?: string; placeholder?: string; optional?: boolean; extra?: React.ReactNode }
   ) => (
     <div style={{ marginBottom: '1rem' }}>
-      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#444', display: 'block', marginBottom: '0.35rem' }}>
-        {label} {opts.optional && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span>}
+      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.35rem' }}>
+        {label} {opts.optional && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({t.optional})</span>}
       </label>
       <div style={{ position: 'relative' }}>
         <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', display: 'flex', pointerEvents: 'none' }}>{opts.icon}</span>
-        <input
-          className="input-field"
-          type={opts.type ?? 'text'}
-          placeholder={opts.placeholder ?? ''}
-          value={value}
-          onChange={(e) => set(e.target.value)}
-          style={opts.extra ? { paddingRight: '2.75rem' } : {}}
-          onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-        />
+        <input className="input-field" type={opts.type ?? 'text'} placeholder={opts.placeholder ?? ''} value={value} onChange={(e) => set(e.target.value)} style={opts.extra ? { paddingRight: '2.75rem' } : {}} onKeyDown={(e) => e.key === 'Enter' && handleRegister()} />
         {opts.extra}
       </div>
     </div>
@@ -70,23 +64,20 @@ export default function RegisterPage() {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div className="card fade-up" style={{ borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '2rem 1.5rem', flex: 1, animationDelay: '0.12s' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', marginBottom: '0.3rem' }}>Create account</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Join the MiZumBA community</p>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', marginBottom: '0.3rem' }}>{t.createAccount}</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{t.joinCommunity}</p>
 
           {error && <div className="error-banner" style={{ marginBottom: '1rem' }}>{error}</div>}
 
-          {field('Full Name', displayName, setDisplayName, { icon: <User size={16} />, placeholder: 'Your full name' })}
-          {field('Username', username, setUsername, { icon: <User size={16} />, placeholder: '@username', optional: true })}
-          {field('Email', email, setEmail, { icon: <Mail size={16} />, type: 'email', placeholder: 'you@mizumba.app' })}
-          {field('Password', password, setPassword, {
+          {field(t.fullName, displayName, setDisplayName, { icon: <User size={16} />, placeholder: t.fullNamePlaceholder })}
+          {field(t.username, username, setUsername, { icon: <User size={16} />, placeholder: t.usernamePlaceholder, optional: true })}
+          {field(t.email, email, setEmail, { icon: <Mail size={16} />, type: 'email', placeholder: t.emailPlaceholder })}
+          {field(t.password, password, setPassword, {
             icon: <Lock size={16} />,
             type: showPw ? 'text' : 'password',
-            placeholder: 'Min. 8 characters',
+            placeholder: t.passwordPlaceholder,
             extra: (
-              <button
-                onClick={() => setShowPw(!showPw)}
-                style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
-              >
+              <button onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             ),
@@ -95,13 +86,13 @@ export default function RegisterPage() {
           <div style={{ marginBottom: '1.5rem' }} />
 
           <button className="btn-primary" onClick={handleRegister} disabled={loading}>
-            {loading ? <span className="spinner" /> : 'Create Account'}
+            {loading ? <span className="spinner" /> : t.createAccount}
           </button>
 
           <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1.25rem' }}>
-            Already have an account?{' '}
-            <button onClick={() => setPage('login')} style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Sign In
+            {t.alreadyHaveAccount}{' '}
+            <button onClick={() => setPage('login')} style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}>
+              {t.signIn}
             </button>
           </p>
         </div>

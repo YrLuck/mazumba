@@ -30,3 +30,12 @@ export const subscribeChannel = (channel_id: string) =>
 
 export const unsubscribeChannel = (channel_id: string) =>
   apiFetch<ChannelSummary>(`/channels/${channel_id}/subscribe`, { method: 'DELETE' })
+
+export const getChannelPosts = (channel_id: string) =>
+  apiFetch<import('../types/api').ChannelPostPublic[]>(`/channels/${channel_id}/posts`)
+
+export const createPost = (channel_id: string, text: string) =>
+  apiFetch<import('../types/api').ChannelPostPublic>(`/channels/${channel_id}/posts`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAppStore } from '../store/useAppStore'
+import { useSettingsStore } from '../store/useSettingsStore'
 import { login } from '../api/auth'
 import { socket } from '../ws/socket'
 
@@ -12,9 +13,10 @@ export default function LoginPage() {
   const [error, setError]     = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { setPage, setUser }  = useAppStore()
+  const { t }                 = useSettingsStore()
 
   const handleLogin = async () => {
-    if (!email || !password) { setError('Please fill in all fields'); return }
+    if (!email || !password) { setError(t.allRequired); return }
     setError(null)
     setLoading(true)
     try {
@@ -23,7 +25,7 @@ export default function LoginPage() {
       socket.connect()
       setPage('chats')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed')
+      setError(e instanceof Error ? e.message : t.loginFailed)
     } finally {
       setLoading(false)
     }
@@ -31,93 +33,46 @@ export default function LoginPage() {
 
   return (
     <div style={{ minHeight: '100vh', minHeight: '100dvh' as string, display: 'flex', flexDirection: 'column' }} className="page-bg">
-      {/* Brand header */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem 2rem' }}>
-        <div
-          className="fade-up"
-          style={{
-            background: 'rgba(255,255,255,0.55)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '1rem',
-            marginBottom: '1rem',
-            backdropFilter: 'blur(12px)',
-            boxShadow: '0 4px 24px rgba(132,36,123,0.12)',
-          }}
-        >
+        <div className="fade-up" style={{ background: 'rgba(255,255,255,0.55)', borderRadius: 'var(--radius-lg)', padding: '1rem', marginBottom: '1rem', backdropFilter: 'blur(12px)', boxShadow: '0 4px 24px rgba(132,36,123,0.12)' }}>
           <Logo size={56} />
         </div>
-        <h1
-          className="fade-up"
-          style={{ fontSize: '1.9rem', fontWeight: 800, color: 'white', letterSpacing: '-0.5px', textShadow: '0 2px 12px rgba(132,36,123,0.25)', animationDelay: '0.05s' }}
-        >
-          MiZumBA
-        </h1>
-        <p
-          className="fade-up"
-          style={{ color: 'rgba(255,255,255,0.88)', fontSize: '0.88rem', marginTop: '0.2rem', animationDelay: '0.1s' }}
-        >
-          Connect. Collaborate. Thrive.
-        </p>
+        <h1 className="fade-up" style={{ fontSize: '1.9rem', fontWeight: 800, color: 'white', letterSpacing: '-0.5px', textShadow: '0 2px 12px rgba(132,36,123,0.25)', animationDelay: '0.05s' }}>MiZumBA</h1>
+        <p className="fade-up" style={{ color: 'rgba(255,255,255,0.88)', fontSize: '0.88rem', marginTop: '0.2rem', animationDelay: '0.1s' }}>Connect. Collaborate. Thrive.</p>
       </div>
 
-      {/* Card */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div
-          className="card fade-up"
-          style={{ borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '2rem 1.5rem', flex: 1, animationDelay: '0.12s' }}
-        >
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', marginBottom: '0.3rem' }}>Welcome back</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Sign in to your account to continue</p>
+        <div className="card fade-up" style={{ borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '2rem 1.5rem', flex: 1, animationDelay: '0.12s' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', marginBottom: '0.3rem' }}>{t.welcomeBack}</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{t.signInContinue}</p>
 
           {error && <div className="error-banner" style={{ marginBottom: '1rem' }}>{error}</div>}
 
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#444', display: 'block', marginBottom: '0.4rem' }}>Email</label>
+          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>{t.email}</label>
           <div style={{ position: 'relative', marginBottom: '1rem' }}>
             <Mail size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input
-              className="input-field"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@mizumba.app"
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              autoComplete="email"
-            />
+            <input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.emailPlaceholder} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} autoComplete="email" />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#444' }}>Password</label>
-            <button style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit', opacity: 0.85, transition: 'opacity var(--duration) var(--ease)' }}>
-              Forgot?
-            </button>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t.password}</label>
+            <button style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif", opacity: 0.85 }}>{t.forgotPassword}</button>
           </div>
           <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
             <Lock size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input
-              className="input-field"
-              type={showPw ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              style={{ paddingRight: '2.75rem' }}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              autoComplete="current-password"
-            />
-            <button
-              onClick={() => setShowPw(!showPw)}
-              style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', transition: 'color var(--duration) var(--ease)' }}
-            >
+            <input className="input-field" type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder} style={{ paddingRight: '2.75rem' }} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} autoComplete="current-password" />
+            <button onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
 
           <button className="btn-primary" onClick={handleLogin} disabled={loading}>
-            {loading ? <span className="spinner" /> : 'Sign In'}
+            {loading ? <span className="spinner" /> : t.signIn}
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0' }}>
             <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 500 }}>or continue with</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 500 }}>{t.orContinueWith}</span>
             <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
           </div>
 
@@ -133,12 +88,9 @@ export default function LoginPage() {
           </div>
 
           <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Don't have an account?{' '}
-            <button
-              onClick={() => setPage('register')}
-              style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity var(--duration) var(--ease)' }}
-            >
-              Sign Up
+            {t.noAccount}{' '}
+            <button onClick={() => setPage('register')} style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}>
+              {t.signUp}
             </button>
           </p>
         </div>
