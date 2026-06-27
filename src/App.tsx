@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import './index.css'
 import { useAppStore } from './store/useAppStore'
 import { useSettingsStore } from './store/useSettingsStore'
@@ -12,13 +12,16 @@ import AppearancePage from './pages/settings/AppearancePage'
 import NotificationsSettingsPage from './pages/settings/NotificationsSettingsPage'
 import PrivacySettingsPage from './pages/settings/PrivacySettingsPage'
 import BlockedUsersPage from './pages/settings/BlockedUsersPage'
+import ChangePasswordPage from './pages/settings/ChangePasswordPage'
 import BottomNav from './components/BottomNav'
+import SearchPanel from './components/SearchPanel'
 import { getTokens } from './api/client'
 import { getMe } from './api/users'
 import { socket } from './ws/socket'
 import { listNotifications } from './api/notifications'
+import { playNotificationSound } from './utils/sound'
 import type { Page } from './store/useAppStore'
-import { MessageCircle, Hash, Bell, User, Sun, Moon } from 'lucide-react'
+import { MessageCircle, Hash, Bell, User, Sun, Moon, Search } from 'lucide-react'
 import { useIsDesktop } from './hooks/useIsDesktop'
 
 const AUTH_PAGES: Page[] = ['login', 'register']
@@ -30,6 +33,40 @@ const NAV_ITEMS: { page: Page; icon: React.ReactNode; labelKey: 'chats' | 'chann
   { page: 'activity', icon: <Bell size={22} />,          labelKey: 'activity' },
   { page: 'profile',  icon: <User size={22} />,          labelKey: 'profile' },
 ]
+
+/* ── Favicon badge ───────────────────────────────────────────── */
+function setFaviconBadge(count: number) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 32; canvas.height = 32
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, 32, 32)
+  ctx.beginPath()
+  ctx.arc(16, 16, 14, 0, Math.PI * 2)
+  ctx.fillStyle = '#84247B'
+  ctx.fill()
+  ctx.fillStyle = 'white'
+  ctx.font = 'bold 14px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(count > 99 ? '99+' : 'M', 16, 16.5)
+  if (count > 0) {
+    ctx.beginPath()
+    ctx.arc(26, 6, 8, 0, Math.PI * 2)
+    ctx.fillStyle = '#ef4444'
+    ctx.fill()
+    ctx.fillStyle = 'white'
+    ctx.font = 'bold 9px sans-serif'
+    ctx.fillText(count > 9 ? '9+' : String(count), 26, 6.5)
+  }
+  let link = document.querySelector<HTMLLinkElement>('link[rel~="icon"]')
+  if (!link) {
+    link = document.createElement('link')
+    link.rel = 'icon'
+    document.head.appendChild(link)
+  }
+  link.href = canvas.toDataURL()
+}
 
 function PageRenderer({ page }: { page: Page }) {
   switch (page) {
@@ -43,13 +80,15 @@ function PageRenderer({ page }: { page: Page }) {
     case 'settings-notifications': return <NotificationsSettingsPage />
     case 'settings-privacy':       return <PrivacySettingsPage />
     case 'settings-blocked':       return <BlockedUsersPage />
+    case 'settings-password':      return <ChangePasswordPage />
   }
 }
 
 export default function App() {
-  const { page, setPage, setUser, logout, unreadNotifications } = useAppStore()
+  const { page, setPage, setUser, logout, unreadNotifications, totalChatUnread, setTotalChatUnread, openChatId } = useAppStore()
   const { t, theme, toggleTheme } = useSettingsStore()
   const isDesktop = useIsDesktop()
+  const [showSearch, setShowSearch] = useState(false)
 
   const loadUnread = useCallback(async () => {
     try {
@@ -71,9 +110,46 @@ export default function App() {
       if (ev.type === 'notification.created') {
         const cur = useAppStore.getState().unreadNotifications
         useAppStore.getState().setUnreadNotifications(cur + 1)
+        playNotificationSound()
+      }
+      if (ev.type === 'message.created') {
+        const msg = ev.payload.message as { chat_id: string }
+        const currentChatId = useAppStore.getState().openChatId
+        if (msg.chat_id !== currentChatId) {
+          const cur = useAppStore.getState().totalChatUnread
+          useAppStore.getState().setTotalChatUnread(cur + 1)
+          playNotificationSound()
+        }
+      }
+      if (ev.type === 'message.read') {
+        useAppStore.getState().setTotalChatUnread(0)
       }
     })
     return off
+  }, [])
+
+  // Reset totalChatUnread when viewing a chat
+  useEffect(() => {
+    if (openChatId) setTotalChatUnread(0)
+  }, [openChatId, setTotalChatUnread])
+
+  // document.title & favicon badge
+  const totalUnread = unreadNotifications + totalChatUnread
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) MiZumBA` : 'MiZumBA'
+    setFaviconBadge(totalUnread)
+  }, [totalUnread])
+
+  // Ctrl+K global search shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowSearch((s) => !s)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [])
 
   const isAuthPage = AUTH_PAGES.includes(page)
@@ -108,6 +184,7 @@ export default function App() {
           <PageRenderer page={page} />
         </div>
         <BottomNav />
+        {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
       </div>
     )
   }
@@ -131,8 +208,21 @@ export default function App() {
           <span style={{ color: 'white', fontWeight: 800, fontSize: '1rem', letterSpacing: '-0.5px' }}>M</span>
         </div>
 
+        {/* Search button */}
+        <button
+          className="sidebar-nav-item"
+          onClick={() => setShowSearch(true)}
+          title={t.search + ' (Ctrl+K)'}
+          style={{ position: 'relative' }}
+        >
+          <span style={{ color: 'var(--text-muted)', display: 'flex', transition: 'color var(--duration) var(--ease)' }}>
+            <Search size={20} />
+          </span>
+        </button>
+
         {NAV_ITEMS.map((item) => {
           const active = activeTab === item.page
+          const badge = item.page === 'activity' ? unreadNotifications : item.page === 'chats' ? totalChatUnread : 0
           return (
             <button
               key={item.page}
@@ -144,9 +234,9 @@ export default function App() {
               <span style={{ color: active ? 'var(--primary)' : 'var(--text-muted)', display: 'flex', transition: 'color var(--duration) var(--ease)' }}>
                 {item.icon}
               </span>
-              {item.page === 'activity' && unreadNotifications > 0 && (
+              {badge > 0 && (
                 <span className="nav-badge" style={{ top: 4, right: 4 }}>
-                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                  {badge > 99 ? '99+' : badge}
                 </span>
               )}
               {active && (
@@ -165,12 +255,14 @@ export default function App() {
         </button>
       </nav>
 
-      {/* Content area — pages handle their own desktop split layout internally */}
+      {/* Content area */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div key={page} className="page-enter" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <PageRenderer page={page} />
         </div>
       </div>
+
+      {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
     </div>
   )
 }

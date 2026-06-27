@@ -163,10 +163,65 @@ const ru: Translations = {
   descriptionOptional: 'Описание (необязательно)',
   privateToggle: 'Приватный',
   nameRequired: 'Введите название',
+  membersRequired: 'Добавьте хотя бы одного участника',
+  searchMembers: 'Поиск участников…',
+  noUsersFound: 'Пользователи не найдены',
   createFailed: 'Не удалось создать',
   creating: 'Создание…',
   createGroup: 'Создать группу',
   createChannel: 'Создать канал',
+
+  // Scroll / pagination
+  scrollToBottom: 'Вниз',
+  loadEarlier: 'Загрузить раньше',
+  noMoreMessages: 'Начало переписки',
+  newMessages: 'новых сообщений',
+
+  // Forward
+  forward: 'Переслать',
+  forwardTo: 'Переслать в',
+
+  // Mute
+  mute: 'Отключить звук',
+  unmute: 'Включить звук',
+
+  // Group info panel
+  groupInfo: 'Информация о группе',
+  removeMember: 'Удалить',
+  addMember: 'Добавить участника',
+  leaveGroup: 'Покинуть группу',
+  deleteGroup: 'Удалить группу',
+  ownerBadge: 'Владелец',
+  adminBadge: 'Администратор',
+  memberBadge: 'Участник',
+  promoteMember: 'Сделать администратором',
+  demoteMember: 'Сделать участником',
+
+  // Channel management
+  editChannelTitle: 'Изменить канал',
+  deleteChannelBtn: 'Удалить канал',
+  deletePost: 'Удалить пост',
+  editPost: 'Изменить пост',
+  confirmDelete: 'Вы уверены?',
+
+  // Change password
+  changePassword: 'Сменить пароль',
+  changePasswordDesc: 'Обновите пароль аккаунта',
+  currentPassword: 'Текущий пароль',
+  newPassword: 'Новый пароль',
+  confirmPassword: 'Подтвердите новый пароль',
+  passwordChanged: 'Пароль обновлён!',
+  passwordChangeFailed: 'Не удалось сменить пароль',
+  passwordMismatch: 'Пароли не совпадают',
+
+  // User profile card
+  sendMessage: 'Написать',
+  viewProfile: 'Профиль',
+  blockUser: 'Заблокировать',
+
+  // System theme
+  systemTheme: 'Система',
+  systemThemeDesc: 'Как на устройстве',
 }
 
 export default ru

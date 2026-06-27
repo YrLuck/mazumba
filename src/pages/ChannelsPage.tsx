@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Plus, Hash, Users, ChevronLeft, Send } from 'lucide-react'
+import { Search, Plus, Hash, Users, ChevronLeft, Send, MoreVertical, Edit2, Trash2, X, Check } from 'lucide-react'
 import CreateChatModal from '../components/CreateChatModal'
-import { listChannels, subscribeChannel, unsubscribeChannel, getChannelPosts, createPost } from '../api/channels'
+import { listChannels, subscribeChannel, unsubscribeChannel, getChannelPosts, createPost, updateChannel, deleteChannel, editPost, deletePost } from '../api/channels'
 import type { ChannelSummary, ChannelPostPublic } from '../types/api'
 import { useAppStore } from '../store/useAppStore'
 import { useSettingsStore } from '../store/useSettingsStore'
@@ -11,27 +11,41 @@ function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
-function formatTime(iso: string, lang: string) {
+function formatTime(iso: string, t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']) {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`
   if (diff < 86_400_000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  if (diff < 172_800_000) return lang === 'ru' ? 'Вчера' : 'Yesterday'
-  return d.toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' })
+  if (diff < 172_800_000) return t.yesterday
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
 /* ── Channel posts view ──────────────────────────────────────── */
-function ChannelView({ channel, onBack, isDesktop }: { channel: ChannelSummary; onBack: () => void; isDesktop: boolean }) {
+function ChannelView({
+  channel: initialChannel, onBack, isDesktop, onChannelDeleted,
+}: {
+  channel: ChannelSummary; onBack: () => void; isDesktop: boolean; onChannelDeleted: () => void
+}) {
   const { user } = useAppStore()
-  const { t, lang } = useSettingsStore()
+  const { t } = useSettingsStore()
+  const [channel, setChannel] = useState<ChannelSummary>(initialChannel)
   const [posts, setPosts] = useState<ChannelPostPublic[]>([])
   const [loading, setLoading] = useState(true)
   const [postText, setPostText] = useState('')
   const [posting, setPosting] = useState(false)
+  const [editingPost, setEditingPost] = useState<ChannelPostPublic | null>(null)
+  const [editText, setEditText] = useState('')
+  const [showChannelMenu, setShowChannelMenu] = useState(false)
+  const [editingChannel, setEditingChannel] = useState(false)
+  const [editChannelTitle, setEditChannelTitle] = useState(channel.title)
+  const [editChannelDesc, setEditChannelDesc] = useState(channel.description ?? '')
+  const [savingChannel, setSavingChannel] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  const isOwner = channel.current_user_role === 'owner' || channel.current_user_role === 'admin'
+  const isOwner = channel.current_user_role === 'owner'
+  const isAdmin = channel.current_user_role === 'admin' || isOwner
 
   useEffect(() => {
     setLoading(true)
@@ -44,6 +58,15 @@ function ChannelView({ channel, onBack, isDesktop }: { channel: ChannelSummary; 
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [posts])
 
+  useEffect(() => {
+    if (!showChannelMenu) return
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowChannelMenu(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [showChannelMenu])
+
   const handlePost = async () => {
     if (!postText.trim() || posting) return
     const text = postText.trim()
@@ -54,6 +77,44 @@ function ChannelView({ channel, onBack, isDesktop }: { channel: ChannelSummary; 
       setPosts((prev) => [...prev, post])
     } catch { setPostText(text) }
     finally { setPosting(false) }
+  }
+
+  const handleEditPost = async (post: ChannelPostPublic) => {
+    if (!editText.trim()) return
+    try {
+      const updated = await editPost(channel.id, post.id, editText.trim())
+      setPosts((prev) => prev.map((p) => p.id === post.id ? updated : p))
+      setEditingPost(null)
+    } catch { /* ignore */ }
+  }
+
+  const handleDeletePost = async (post: ChannelPostPublic) => {
+    if (!window.confirm(t.confirmDelete)) return
+    try {
+      await deletePost(channel.id, post.id)
+      setPosts((prev) => prev.filter((p) => p.id !== post.id))
+    } catch { /* ignore */ }
+  }
+
+  const handleEditChannel = async () => {
+    setSavingChannel(true)
+    try {
+      const updated = await updateChannel(channel.id, {
+        title: editChannelTitle.trim() || undefined,
+        description: editChannelDesc.trim() || undefined,
+      })
+      setChannel({ ...channel, title: updated.title, description: updated.description })
+      setEditingChannel(false)
+    } catch { /* ignore */ }
+    finally { setSavingChannel(false) }
+  }
+
+  const handleDeleteChannel = async () => {
+    if (!window.confirm(t.confirmDelete)) return
+    try {
+      await deleteChannel(channel.id)
+      onChannelDeleted()
+    } catch { /* ignore */ }
   }
 
   return (
@@ -74,42 +135,145 @@ function ChannelView({ channel, onBack, isDesktop }: { channel: ChannelSummary; 
             {channel.subscribers_count.toLocaleString()} {t.subscribers}
           </div>
         </div>
+        {isAdmin && (
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button onClick={() => setShowChannelMenu((s) => !s)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+              <MoreVertical size={20} />
+            </button>
+            {showChannelMenu && (
+              <div className="ctx-menu" style={{ right: 0, top: '100%' }}>
+                <button className="ctx-item" onClick={() => { setEditingChannel(true); setEditChannelTitle(channel.title); setEditChannelDesc(channel.description ?? ''); setShowChannelMenu(false) }}>
+                  <Edit2 size={14} /> {t.editChannelTitle}
+                </button>
+                {isOwner && (
+                  <button className="ctx-item danger" onClick={() => { setShowChannelMenu(false); handleDeleteChannel() }}>
+                    <Trash2 size={14} /> {t.deleteChannelBtn}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Edit channel form */}
+      {editingChannel && (
+        <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '0.875rem 1rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              className="input-field"
+              value={editChannelTitle}
+              onChange={(e) => setEditChannelTitle(e.target.value)}
+              placeholder={t.channelName}
+              style={{ flex: 1 }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              className="input-field"
+              value={editChannelDesc}
+              onChange={(e) => setEditChannelDesc(e.target.value)}
+              placeholder={t.descriptionOptional}
+              style={{ flex: 1 }}
+            />
+            <button
+              onClick={handleEditChannel}
+              disabled={savingChannel}
+              style={{ border: 'none', background: 'var(--gradient)', color: 'white', borderRadius: 'var(--radius-sm)', padding: '0 0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600, fontSize: '0.8rem', fontFamily: "'Baloo Da 2', sans-serif" }}
+            >
+              <Check size={14} /> {savingChannel ? t.saving : t.save}
+            </button>
+            <button
+              onClick={() => setEditingChannel(false)}
+              style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)', padding: '0 0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Posts */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>{t.loading}</div>}
-        {!loading && posts.length === 0 && (
+        {!loading && posts.filter((p) => !p.deleted_at).length === 0 && (
           <div className="empty-state">
             <div className="empty-state-icon"><Hash size={28} color="var(--text-muted)" /></div>
             <span style={{ fontSize: '0.85rem' }}>{t.noPosts}</span>
           </div>
         )}
-        {posts.filter((p) => !p.deleted_at).map((post) => (
-          <div key={post.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.625rem' }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.7rem', fontWeight: 700, overflow: 'hidden' }}>
-                {post.author?.avatar_url
-                  ? <img src={post.author.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : initials(post.author?.display_name ?? 'A')
-                }
+        {posts.filter((p) => !p.deleted_at).map((post) => {
+          const canEdit = post.author_id === user?.id
+          const canDelete = canEdit || isAdmin
+          const isEditingThis = editingPost?.id === post.id
+
+          return (
+            <div key={post.id} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.625rem' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.7rem', fontWeight: 700, overflow: 'hidden' }}>
+                  {post.author?.avatar_url
+                    ? <img src={post.author.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : initials(post.author?.display_name ?? 'A')
+                  }
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)' }}>{post.author?.display_name ?? 'Author'}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{formatTime(post.created_at, t)}{post.updated_at !== post.created_at && ` · ${t.edited}`}</div>
+                </div>
+                {(canEdit || canDelete) && (
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    {canEdit && (
+                      <button
+                        onClick={() => { setEditingPost(post); setEditText(post.text) }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '0.25rem' }}
+                        title={t.editPost}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDeletePost(post)}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '0.25rem' }}
+                        title={t.deletePost}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)' }}>{post.author?.display_name ?? 'Author'}</div>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{formatTime(post.created_at, lang)}</div>
-              </div>
+              {post.image_url && (
+                <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: 'var(--radius-xs)', marginBottom: '0.5rem', maxHeight: 300, objectFit: 'cover' }} />
+              )}
+              {isEditingThis ? (
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    className="input-field"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleEditPost(post)}
+                    style={{ flex: 1 }}
+                    autoFocus
+                  />
+                  <button onClick={() => handleEditPost(post)} style={{ border: 'none', background: 'var(--gradient)', color: 'white', borderRadius: 'var(--radius-sm)', padding: '0 0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <Check size={14} />
+                  </button>
+                  <button onClick={() => setEditingPost(null)} style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)', padding: '0 0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.55 }}>{post.text}</p>
+              )}
             </div>
-            {post.image_url && (
-              <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: 'var(--radius-xs)', marginBottom: '0.5rem', maxHeight: 300, objectFit: 'cover' }} />
-            )}
-            <p style={{ fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.55 }}>{post.text}</p>
-          </div>
-        ))}
+          )
+        })}
         <div ref={endRef} />
       </div>
 
       {/* Post input (owners/admins only) */}
-      {isOwner && (
+      {isAdmin && (
         <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '0.6rem 0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
           <div style={{ flex: 1, background: 'var(--input-bg)', borderRadius: 'var(--radius-full)', padding: '0.45rem 0.875rem' }}>
             <input className="input-bare" placeholder={t.writePost} value={postText} onChange={(e) => setPostText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePost()} />
@@ -214,7 +378,7 @@ function ChannelListPanel({ onOpen, openChannelId }: { onOpen: (ch: ChannelSumma
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }} className="truncate">#{ch.title}</span>
                 <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                  {ch.last_post ? formatTime(ch.last_post.created_at, useSettingsStore.getState().lang) : ''}
+                  {ch.last_post ? formatTime(ch.last_post.created_at, useSettingsStore.getState().t) : ''}
                 </span>
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -265,6 +429,11 @@ export default function ChannelsPage() {
     setOpenChannel(null)
   }
 
+  const handleChannelDeleted = () => {
+    setLocalChannel(null)
+    setOpenChannel(null)
+  }
+
   if (isDesktop) {
     return (
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -273,7 +442,7 @@ export default function ChannelsPage() {
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {localChannel ? (
-            <ChannelView channel={localChannel} onBack={handleBack} isDesktop={true} />
+            <ChannelView channel={localChannel} onBack={handleBack} isDesktop={true} onChannelDeleted={handleChannelDeleted} />
           ) : (
             <div className="empty-state" style={{ height: '100%' }}>
               <div className="empty-state-icon">
@@ -291,7 +460,7 @@ export default function ChannelsPage() {
   }
 
   if (localChannel) {
-    return <ChannelView channel={localChannel} onBack={handleBack} isDesktop={false} />
+    return <ChannelView channel={localChannel} onBack={handleBack} isDesktop={false} onChannelDeleted={handleChannelDeleted} />
   }
 
   return <ChannelListPanel onOpen={handleOpen} openChannelId={null} />

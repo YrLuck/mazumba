@@ -1,4 +1,4 @@
-import { ChevronLeft, Sun, Moon, Globe } from 'lucide-react'
+import { ChevronLeft, Sun, Moon, Globe, Monitor } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
@@ -69,7 +69,7 @@ export default function AppearancePage() {
               onClick={() => setTheme('dark')}
               style={{
                 width: '100%', padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.875rem',
-                border: 'none', cursor: 'pointer',
+                border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)',
                 background: theme === 'dark' ? 'rgba(132,36,123,0.06)' : 'var(--surface)',
                 transition: 'background var(--duration) var(--ease)',
               }}
@@ -81,6 +81,29 @@ export default function AppearancePage() {
                 <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>{t.darkMode}</div>
               </div>
               {theme === 'dark' && (
+                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: 'white', fontSize: '0.7rem', fontWeight: 700 }}>✓</span>
+                </div>
+              )}
+            </button>
+
+            <button
+              onClick={() => setTheme('system')}
+              style={{
+                width: '100%', padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.875rem',
+                border: 'none', cursor: 'pointer',
+                background: theme === 'system' ? 'rgba(132,36,123,0.06)' : 'var(--surface)',
+                transition: 'background var(--duration) var(--ease)',
+              }}
+            >
+              <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--bg)', border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Monitor size={20} color="var(--text-muted)" />
+              </div>
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>{t.systemTheme}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>{t.systemThemeDesc}</div>
+              </div>
+              {theme === 'system' && (
                 <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ color: 'white', fontSize: '0.7rem', fontWeight: 700 }}>✓</span>
                 </div>

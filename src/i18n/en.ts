@@ -161,10 +161,65 @@ const en = {
   descriptionOptional: 'Description (optional)',
   privateToggle: 'Private',
   nameRequired: 'Name is required',
+  membersRequired: 'Add at least one member',
+  searchMembers: 'Search members…',
+  noUsersFound: 'No users found',
   createFailed: 'Failed to create',
   creating: 'Creating…',
   createGroup: 'Create Group',
   createChannel: 'Create Channel',
+
+  // Scroll / pagination
+  scrollToBottom: 'Scroll to bottom',
+  loadEarlier: 'Load earlier messages',
+  noMoreMessages: 'Beginning of conversation',
+  newMessages: 'new messages',
+
+  // Forward
+  forward: 'Forward',
+  forwardTo: 'Forward to',
+
+  // Mute
+  mute: 'Mute',
+  unmute: 'Unmute',
+
+  // Group info panel
+  groupInfo: 'Group Info',
+  removeMember: 'Remove',
+  addMember: 'Add member',
+  leaveGroup: 'Leave group',
+  deleteGroup: 'Delete group',
+  ownerBadge: 'Owner',
+  adminBadge: 'Admin',
+  memberBadge: 'Member',
+  promoteMember: 'Promote to admin',
+  demoteMember: 'Demote to member',
+
+  // Channel management
+  editChannelTitle: 'Edit Channel',
+  deleteChannelBtn: 'Delete Channel',
+  deletePost: 'Delete post',
+  editPost: 'Edit post',
+  confirmDelete: 'Are you sure?',
+
+  // Change password
+  changePassword: 'Change Password',
+  changePasswordDesc: 'Update your account password',
+  currentPassword: 'Current password',
+  newPassword: 'New password',
+  confirmPassword: 'Confirm new password',
+  passwordChanged: 'Password updated!',
+  passwordChangeFailed: 'Failed to change password',
+  passwordMismatch: "Passwords don't match",
+
+  // User profile card
+  sendMessage: 'Send message',
+  viewProfile: 'View Profile',
+  blockUser: 'Block',
+
+  // System theme
+  systemTheme: 'System',
+  systemThemeDesc: 'Follow device setting',
 } as const
 
 export type Translations = typeof en

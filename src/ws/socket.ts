@@ -14,17 +14,25 @@ class SocketManager {
   private handlers = new Set<Handler>()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private shouldReconnect = false
+  private retryCount = 0
+  private readonly MAX_RETRIES = 10
+  private readonly BASE_DELAY = 1000
 
   connect() {
     const { access } = getTokens()
     if (!access || this.ws?.readyState === WebSocket.OPEN) return
     this.shouldReconnect = true
+    this.retryCount = 0
     this._open(access)
   }
 
   private _open(token: string) {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return
     this.ws = new WebSocket(`${WS_BASE}?token=${token}`)
+
+    this.ws.onopen = () => {
+      this.retryCount = 0
+    }
 
     this.ws.onmessage = (e) => {
       try {
@@ -36,11 +44,13 @@ class SocketManager {
     }
 
     this.ws.onclose = () => {
-      if (this.shouldReconnect) {
+      if (this.shouldReconnect && this.retryCount < this.MAX_RETRIES) {
+        const delay = Math.min(this.BASE_DELAY * Math.pow(2, this.retryCount), 30000)
+        this.retryCount++
         this.reconnectTimer = setTimeout(() => {
           const { access } = getTokens()
           if (access) this._open(access)
-        }, 3000)
+        }, delay)
       }
     }
 
@@ -51,6 +61,7 @@ class SocketManager {
 
   disconnect() {
     this.shouldReconnect = false
+    this.retryCount = 0
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     this.ws?.close()
     this.ws = null

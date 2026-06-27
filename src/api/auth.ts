@@ -42,3 +42,10 @@ export async function refreshTokens(): Promise<TokenPair> {
     body: JSON.stringify({ refresh_token: refresh }),
   })
 }
+
+export async function changePassword(current_password: string, new_password: string): Promise<void> {
+  await apiFetch('/auth/change-password', {
+    method: 'PATCH',
+    body: JSON.stringify({ current_password, new_password }),
+  })
+}

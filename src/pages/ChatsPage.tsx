@@ -2,9 +2,13 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Search, Plus, Mic, MicOff, Send, Paperclip,
   ChevronLeft, MoreVertical, Edit2, Trash2, Reply,
-  Smile, X, Check, CheckCheck,
+  Smile, X, Check, CheckCheck, Copy, Forward,
+  ChevronDown,
 } from 'lucide-react'
 import CreateChatModal from '../components/CreateChatModal'
+import GroupInfoPanel from '../components/GroupInfoPanel'
+import UserProfileCard from '../components/UserProfileCard'
+import EmojiPicker from '../components/EmojiPicker'
 import { listChats, getMessages, sendMessageRest, markRead } from '../api/chats'
 import { editMessage, deleteMessage, addReaction } from '../api/messages'
 import { uploadFile } from '../api/files'
@@ -38,10 +42,27 @@ function formatTime(iso: string, t: ReturnType<typeof import('../store/useSettin
   return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
+function formatDate(iso: string, t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']) {
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  if (diff < 86_400_000 && d.getDate() === now.getDate()) return t.today
+  if (diff < 172_800_000) return t.yesterday
+  return d.toLocaleDateString([], { day: 'numeric', month: 'long', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
+}
+
+function isSameDay(a: string, b: string) {
+  const da = new Date(a), db = new Date(b)
+  return da.getDate() === db.getDate() && da.getMonth() === db.getMonth() && da.getFullYear() === db.getFullYear()
+}
+
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉']
 
+/* ── Draft message store ─────────────────────────────────────── */
+const drafts = new Map<string, string>()
+
 /* ── Typing store (module-level) ─────────────────────────────── */
-const typingUsers = new Map<string /* chatId */, Set<string /* userId */>>()
+const typingUsers = new Map<string, Set<string>>()
 const typingListeners = new Set<() => void>()
 function notifyTyping() { typingListeners.forEach((fn) => fn()) }
 function setTyping(chatId: string, userId: string, active: boolean) {
@@ -73,17 +94,50 @@ function ReactionBar({ messageId, onClose }: { messageId: string; onClose: () =>
   )
 }
 
+/* ── Image lightbox ──────────────────────────────────────────── */
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+    >
+      <button onClick={onClose} style={{ position: 'absolute', top: '1rem', right: '1rem', border: 'none', background: 'rgba(255,255,255,0.15)', borderRadius: '50%', width: 40, height: 40, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <X size={20} />
+      </button>
+      <img
+        src={src}
+        alt=""
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', cursor: 'default' }}
+      />
+    </div>
+  )
+}
+
 /* ── Message bubble ──────────────────────────────────────────── */
 function MessageBubble({
-  msg, mine, isGroup, replyMsg, onReply, onEdit, onDelete, t,
+  msg, mine, isGroup, replyMsg, onReply, onEdit, onDelete, onCopy, onForward, onAvatarClick, t, isDesktop,
 }: {
   msg: MessagePublic; mine: boolean; isGroup: boolean;
-  replyMsg?: MessagePublic | null; onReply: () => void; onEdit: () => void; onDelete: () => void;
+  replyMsg?: MessagePublic | null; onReply: () => void; onEdit: () => void;
+  onDelete: () => void; onCopy: () => void; onForward: () => void;
+  onAvatarClick?: (userId: string) => void;
   t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']
+  isDesktop: boolean
 }) {
   const [showCtx, setShowCtx] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const ctxRef = useRef<HTMLDivElement>(null)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!showCtx && !showEmoji) return
@@ -96,6 +150,46 @@ function MessageBubble({
     return () => document.removeEventListener('mousedown', close)
   }, [showCtx, showEmoji])
 
+  // Smart context menu position
+  useEffect(() => {
+    if (!showCtx || !ctxRef.current || !ctxPos) return
+    const el = ctxRef.current
+    const rect = el.getBoundingClientRect()
+    const vw = window.innerWidth; const vh = window.innerHeight
+    let x = ctxPos.x; let y = ctxPos.y
+    if (x + rect.width > vw - 8) x = vw - rect.width - 8
+    if (y + rect.height > vh - 8) y = y - rect.height
+    if (x < 8) x = 8
+    el.style.left = x + 'px'
+    el.style.top = y + 'px'
+  }, [showCtx, ctxPos])
+
+  const openCtx = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    const x = 'clientX' in e ? e.clientX : (e as React.TouchEvent).touches[0]?.clientX ?? 0
+    const y = 'clientY' in e ? e.clientY : (e as React.TouchEvent).touches[0]?.clientY ?? 0
+    setCtxPos({ x, y })
+    setShowCtx(true)
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isDesktop) return
+    longPressTimer.current = setTimeout(() => openCtx(e), 500)
+  }
+  const cancelLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+
+  if (msg.type === 'system') {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '0.35rem 0' }}>
+        <div style={{ background: 'rgba(132,36,123,0.08)', borderRadius: 'var(--radius-full)', padding: '0.2rem 0.75rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {msg.text}
+        </div>
+      </div>
+    )
+  }
+
   if (msg.deleted_at) {
     return (
       <div style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', padding: '0.1rem 0' }}>
@@ -107,98 +201,185 @@ function MessageBubble({
   }
 
   return (
-    <div ref={ref} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', padding: '0.1rem 0', position: 'relative' }}>
-      {!mine && isGroup && (
-        <div style={{ width: 28, height: 28, borderRadius: '50%', background: avatarColor(msg.sender_id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0, marginRight: '0.4rem', alignSelf: 'flex-end' }}>
-          {initials(msg.sender?.display_name ?? null)}
-        </div>
-      )}
-
-      <div style={{ maxWidth: '72%', position: 'relative' }}>
-        {/* Reply preview */}
-        {replyMsg && (
-          <div style={{ fontSize: '0.75rem', color: mine ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', borderLeft: '2.5px solid', borderColor: mine ? 'rgba(255,255,255,0.5)' : 'var(--primary)', paddingLeft: '0.5rem', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-            {replyMsg.text}
-          </div>
+    <>
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+      <div ref={ref} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', padding: '0.1rem 0', position: 'relative' }}>
+        {!mine && isGroup && (
+          <button
+            onClick={() => onAvatarClick?.(msg.sender_id)}
+            style={{ width: 28, height: 28, borderRadius: '50%', background: avatarColor(msg.sender_id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0, marginRight: '0.4rem', alignSelf: 'flex-end', border: 'none', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
+            {msg.sender?.avatar_url
+              ? <img src={msg.sender.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initials(msg.sender?.display_name ?? null)
+            }
+          </button>
         )}
 
-        <div
-          onClick={() => { setShowCtx(true); setShowEmoji(false) }}
-          style={{
-            padding: '0.55rem 0.875rem',
-            borderRadius: mine ? '1rem 1rem 0.2rem 1rem' : '1rem 1rem 1rem 0.2rem',
-            background: mine ? 'linear-gradient(135deg, #8EEBF2 0%, #84247B 100%)' : 'var(--bubble-other)',
-            color: mine ? 'white' : 'var(--bubble-other-text)',
-            fontSize: '0.9rem',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            cursor: 'pointer',
-            wordBreak: 'break-word',
-          }}
-        >
-          {!mine && isGroup && (
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: mine ? 'rgba(255,255,255,0.85)' : 'var(--primary)', marginBottom: '0.15rem' }}>
-              {msg.sender?.display_name ?? 'User'}
+        <div style={{ maxWidth: '72%', position: 'relative' }}>
+          {replyMsg && (
+            <div style={{ fontSize: '0.75rem', color: mine ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', borderLeft: '2.5px solid', borderColor: mine ? 'rgba(255,255,255,0.5)' : 'var(--primary)', paddingLeft: '0.5rem', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+              {replyMsg.text}
             </div>
           )}
-          {/* Attachment */}
-          {msg.attachment_url && (
-            <div style={{ marginBottom: '0.3rem' }}>
-              {msg.attachment_mime_type?.startsWith('image/') ? (
-                <img src={msg.attachment_url} alt={msg.attachment_name ?? ''} style={{ maxWidth: 200, maxHeight: 200, borderRadius: 'var(--radius-xs)', display: 'block' }} />
-              ) : (
-                <a href={msg.attachment_url} target="_blank" rel="noreferrer" style={{ color: 'inherit', opacity: 0.85, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <Paperclip size={12} /> {msg.attachment_name ?? 'File'}
-                </a>
-              )}
+
+          <div
+            onClick={isDesktop ? undefined : openCtx}
+            onContextMenu={isDesktop ? openCtx : undefined}
+            onTouchStart={!isDesktop ? handleTouchStart : undefined}
+            onTouchEnd={cancelLongPress}
+            onTouchMove={cancelLongPress}
+            style={{
+              padding: '0.55rem 0.875rem',
+              borderRadius: mine ? '1rem 1rem 0.2rem 1rem' : '1rem 1rem 1rem 0.2rem',
+              background: mine ? 'linear-gradient(135deg, #8EEBF2 0%, #84247B 100%)' : 'var(--bubble-other)',
+              color: mine ? 'white' : 'var(--bubble-other-text)',
+              fontSize: '0.9rem',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              cursor: 'pointer',
+              wordBreak: 'break-word',
+            }}
+          >
+            {!mine && isGroup && (
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: mine ? 'rgba(255,255,255,0.85)' : 'var(--primary)', marginBottom: '0.15rem' }}>
+                {msg.sender?.display_name ?? 'User'}
+              </div>
+            )}
+            {msg.attachment_url && (
+              <div style={{ marginBottom: '0.3rem' }}>
+                {msg.attachment_mime_type?.startsWith('image/') ? (
+                  <img
+                    src={msg.attachment_url}
+                    alt={msg.attachment_name ?? ''}
+                    onClick={(e) => { e.stopPropagation(); setLightboxSrc(msg.attachment_url!) }}
+                    style={{ maxWidth: 200, maxHeight: 200, borderRadius: 'var(--radius-xs)', display: 'block', cursor: 'zoom-in' }}
+                  />
+                ) : (
+                  <a href={msg.attachment_url} target="_blank" rel="noreferrer" style={{ color: 'inherit', opacity: 0.85, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Paperclip size={12} /> {msg.attachment_name ?? 'File'}
+                  </a>
+                )}
+              </div>
+            )}
+            {msg.text && <div>{msg.text}</div>}
+            <div style={{ fontSize: '0.6rem', textAlign: 'right', marginTop: '0.2rem', opacity: 0.65, display: 'flex', gap: '0.3rem', alignItems: 'center', justifyContent: 'flex-end' }}>
+              {msg.edited_at && <span style={{ fontStyle: 'italic' }}>{t.edited}</span>}
+              <span>{formatTime(msg.created_at, t)}</span>
+              {mine && <CheckCheck size={10} />}
+            </div>
+          </div>
+
+          {/* Context menu (fixed position) */}
+          {showCtx && ctxPos && (
+            <div
+              ref={ctxRef}
+              className="ctx-menu"
+              style={{ position: 'fixed', left: ctxPos.x, top: ctxPos.y, zIndex: 500 }}
+            >
+              <button className="ctx-item" onClick={() => { onReply(); setShowCtx(false) }}><Reply size={14} /> {t.reply}</button>
+              <button className="ctx-item" onClick={() => { onCopy(); setShowCtx(false) }}><Copy size={14} /> {t.copyText}</button>
+              <button className="ctx-item" onClick={() => { setShowEmoji(true); setShowCtx(false) }}><Smile size={14} /> {t.addReaction}</button>
+              <button className="ctx-item" onClick={() => { onForward(); setShowCtx(false) }}><Forward size={14} /> {t.forward}</button>
+              {mine && <button className="ctx-item" onClick={() => { onEdit(); setShowCtx(false) }}><Edit2 size={14} /> {t.editMessage}</button>}
+              {mine && <button className="ctx-item danger" onClick={() => { onDelete(); setShowCtx(false) }}><Trash2 size={14} /> {t.deleteMessage}</button>}
             </div>
           )}
-          {msg.text && <div>{msg.text}</div>}
-          <div style={{ fontSize: '0.6rem', textAlign: 'right', marginTop: '0.2rem', opacity: 0.65, display: 'flex', gap: '0.3rem', alignItems: 'center', justifyContent: 'flex-end' }}>
-            {msg.edited_at && <span style={{ fontStyle: 'italic' }}>{t.edited}</span>}
-            <span>{formatTime(msg.created_at, t)}</span>
-            {mine && <CheckCheck size={10} />}
-          </div>
+
+          {/* Emoji reaction picker */}
+          {showEmoji && (
+            <div style={{ position: 'absolute', bottom: '100%', [mine ? 'right' : 'left']: 0, marginBottom: 4, zIndex: 20 }}>
+              <ReactionBar messageId={msg.id} onClose={() => setShowEmoji(false)} />
+            </div>
+          )}
         </div>
+      </div>
+    </>
+  )
+}
 
-        {/* Context menu */}
-        {showCtx && (
-          <div className="ctx-menu" style={{ right: mine ? 0 : 'auto', left: mine ? 'auto' : 0 }}>
-            <button className="ctx-item" onClick={() => { onReply(); setShowCtx(false) }}><Reply size={14} /> {t.reply}</button>
-            <button className="ctx-item" onClick={() => { setShowEmoji(true); setShowCtx(false) }}><Smile size={14} /> {t.addReaction}</button>
-            {mine && <button className="ctx-item" onClick={() => { onEdit(); setShowCtx(false) }}><Edit2 size={14} /> {t.editMessage}</button>}
-            {mine && <button className="ctx-item danger" onClick={() => { onDelete(); setShowCtx(false) }}><Trash2 size={14} /> {t.deleteMessage}</button>}
-          </div>
-        )}
+/* ── Date separator ──────────────────────────────────────────── */
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', userSelect: 'none' }}>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg)', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+    </div>
+  )
+}
 
-        {/* Emoji reaction picker */}
-        {showEmoji && (
-          <div style={{ position: 'absolute', bottom: '100%', [mine ? 'right' : 'left']: 0, marginBottom: 4, zIndex: 20 }}>
-            <ReactionBar messageId={msg.id} onClose={() => setShowEmoji(false)} />
-          </div>
-        )}
+/* ── Forward modal ───────────────────────────────────────────── */
+function ForwardModal({ chats, onForward, onClose }: { chats: ChatSummary[]; onForward: (chatId: string) => void; onClose: () => void }) {
+  const { t } = useSettingsStore()
+  const [search, setSearch] = useState('')
+  const filtered = chats.filter((c) => (c.title ?? '').toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', maxHeight: '60vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ fontWeight: 700, flex: 1, color: 'var(--text)' }}>{t.forwardTo}</span>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: '0.5rem 1rem' }}>
+          <input className="input-field" placeholder={t.searchChats} value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtered.map((c) => (
+            <button key={c.id} onClick={() => onForward(c.id)} style={{ width: '100%', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', border: 'none', background: 'none', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: avatarColor(c.id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}>
+                {initials(c.title)}
+              </div>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)' }} className="truncate">{c.title ?? 'Chat'}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
 /* ── Chat view (messages + input) ────────────────────────────── */
-function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () => void; isDesktop: boolean }) {
+function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
+  chat: ChatSummary; allChats: ChatSummary[]; onBack: () => void; isDesktop: boolean; onChatDeleted: () => void
+}) {
   const { user } = useAppStore()
   const { t } = useSettingsStore()
   const [messages, setMessages] = useState<MessagePublic[]>([])
   const [messagesMap, setMessagesMap] = useState<Map<string, MessagePublic>>(new Map())
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(drafts.get(chat.id) ?? '')
   const [recording, setRecording] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [replyTo, setReplyTo] = useState<MessagePublic | null>(null)
   const [editingMsg, setEditingMsg] = useState<MessagePublic | null>(null)
+  const [showGroupInfo, setShowGroupInfo] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const [forwardMsg, setForwardMsg] = useState<MessagePublic | null>(null)
+  const [atBottom, setAtBottom] = useState(true)
+  const [newMsgCount, setNewMsgCount] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUserIds = useTypingUsers(chat.id)
+  const prevChatId = useRef<string | null>(null)
+
+  // Save draft when leaving chat
+  useEffect(() => {
+    return () => {
+      if (prevChatId.current && message) drafts.set(prevChatId.current, message)
+      else if (prevChatId.current) drafts.delete(prevChatId.current)
+    }
+  })
+  useEffect(() => {
+    prevChatId.current = chat.id
+    setMessage(drafts.get(chat.id) ?? '')
+  }, [chat.id])
 
   useEffect(() => {
     setLoading(true)
@@ -206,11 +387,15 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
     setMessagesMap(new Map())
     setReplyTo(null)
     setEditingMsg(null)
+    setHasMore(true)
+    setNewMsgCount(0)
+    setAtBottom(true)
     getMessages(chat.id).then((data) => {
       setMessages(data)
       const m = new Map<string, MessagePublic>()
       data.forEach((msg) => m.set(msg.id, msg))
       setMessagesMap(m)
+      setHasMore(data.length >= 50)
       if (data.length > 0) markRead(chat.id, data[data.length - 1].id).catch(() => {})
     }).catch(() => {}).finally(() => setLoading(false))
   }, [chat.id])
@@ -222,7 +407,12 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
         if (msg.chat_id !== chat.id) return
         setMessages((prev) => [...prev, msg])
         setMessagesMap((prev) => new Map(prev).set(msg.id, msg))
-        markRead(chat.id, msg.id).catch(() => {})
+        if (atBottom) {
+          markRead(chat.id, msg.id).catch(() => {})
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+        } else {
+          setNewMsgCount((n) => n + 1)
+        }
       }
       if (ev.type === 'typing.start') {
         const { chat_id, user_id } = ev.payload as { chat_id: string; user_id: string }
@@ -234,11 +424,60 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
       }
     })
     return () => { off(); typingUsers.delete(chat.id); notifyTyping() }
-  }, [chat.id, user?.id])
+  }, [chat.id, user?.id, atBottom])
 
+  // Auto-scroll on load
   useEffect(() => {
+    if (!loading) {
+      messagesEndRef.current?.scrollIntoView()
+    }
+  }, [loading])
+
+  // Auto-scroll on typing indicators
+  useEffect(() => {
+    if (atBottom) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [typingUserIds.length, atBottom])
+
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    setAtBottom(isNearBottom)
+    if (isNearBottom && newMsgCount > 0) {
+      setNewMsgCount(0)
+      const msgs = messages
+      if (msgs.length > 0) markRead(chat.id, msgs[msgs.length - 1].id).catch(() => {})
+    }
+  }
+
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, typingUserIds.length])
+    setNewMsgCount(0)
+    setAtBottom(true)
+    const msgs = messages
+    if (msgs.length > 0) markRead(chat.id, msgs[msgs.length - 1].id).catch(() => {})
+  }
+
+  const loadEarlier = async () => {
+    if (loadingEarlier || !hasMore || messages.length === 0) return
+    setLoadingEarlier(true)
+    const firstId = messages[0].id
+    const scrollEl = scrollRef.current
+    const prevScrollHeight = scrollEl?.scrollHeight ?? 0
+    try {
+      const older = await getMessages(chat.id, 50, firstId)
+      if (older.length < 50) setHasMore(false)
+      setMessages((prev) => [...older, ...prev])
+      older.forEach((m) => setMessagesMap((prev) => new Map(prev).set(m.id, m)))
+      // Restore scroll position
+      requestAnimationFrame(() => {
+        if (scrollEl) {
+          scrollEl.scrollTop = scrollEl.scrollHeight - prevScrollHeight
+        }
+      })
+    } catch { /* ignore */ }
+    finally { setLoadingEarlier(false) }
+  }
 
   const handleTyping = () => {
     socket.send('typing.start', { chat_id: chat.id })
@@ -256,6 +495,7 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
     if (editingMsg) {
       setEditingMsg(null)
       setMessage('')
+      drafts.delete(chat.id)
       editMessage(editingMsg.id, text).then((updated) => {
         setMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m))
         setMessagesMap((prev) => new Map(prev).set(updated.id, updated))
@@ -264,6 +504,7 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
     }
 
     setMessage('')
+    drafts.delete(chat.id)
     setSending(true)
     const sent = socket.send('message.send', { chat_id: chat.id, text, type: 'text', reply_to_id: replyTo?.id ?? null })
     setReplyTo(null)
@@ -304,6 +545,11 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
     }).catch(() => {})
   }
 
+  const handleForwardSend = async (targetChatId: string, text: string) => {
+    setForwardMsg(null)
+    socket.send('message.send', { chat_id: targetChatId, text, type: 'text', reply_to_id: null })
+  }
+
   const startEdit = (msg: MessagePublic) => {
     setEditingMsg(msg)
     setReplyTo(null)
@@ -323,11 +569,17 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
             <ChevronLeft size={24} />
           </button>
         )}
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: avatarColor(chat.id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0, overflow: 'hidden' }}>
+        <div
+          onClick={() => chat.type === 'group' && setShowGroupInfo(true)}
+          style={{ width: 38, height: 38, borderRadius: '50%', background: avatarColor(chat.id), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0, overflow: 'hidden', cursor: chat.type === 'group' ? 'pointer' : 'default' }}>
           {chat.avatar_url ? <img src={chat.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(chat.title)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }} className="truncate">{chat.title ?? 'Chat'}</div>
+          <div
+            onClick={() => chat.type === 'group' && setShowGroupInfo(true)}
+            style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)', cursor: chat.type === 'group' ? 'pointer' : 'default' }}
+            className="truncate"
+          >{chat.title ?? 'Chat'}</div>
           <div style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>
             {typingUserIds.length > 0
               ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>{t.typing} <span className="typing-dots" style={{ display: 'inline-flex' }}>{[0,1,2].map((i) => <span key={i} className="typing-dot" style={{ display: 'inline-block' }} />)}</span></span>
@@ -335,29 +587,61 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
             }
           </div>
         </div>
-        <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
-          <MoreVertical size={20} />
-        </button>
+        {chat.type === 'group' && (
+          <button onClick={() => setShowGroupInfo(true)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+            <MoreVertical size={20} />
+          </button>
+        )}
       </div>
 
-      {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+      {/* Messages container */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', position: 'relative' }}
+      >
+        {/* Load earlier button */}
+        {!loading && hasMore && (
+          <div style={{ textAlign: 'center', paddingBottom: '0.5rem' }}>
+            <button
+              onClick={loadEarlier}
+              disabled={loadingEarlier}
+              style={{ border: '1.5px solid var(--border)', background: 'var(--surface)', borderRadius: 'var(--radius-full)', padding: '0.35rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', fontFamily: "'Baloo Da 2', sans-serif" }}
+            >
+              {loadingEarlier ? t.loading : t.loadEarlier}
+            </button>
+          </div>
+        )}
+        {!loading && !hasMore && messages.length > 0 && (
+          <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>{t.noMoreMessages}</div>
+        )}
+
         {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.85rem' }}>{t.loadingMessages}</div>}
         {!loading && messages.length === 0 && <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.85rem' }}>{t.noMessages}</div>}
 
-        {messages.map((m) => (
-          <MessageBubble
-            key={m.id}
-            msg={m}
-            mine={m.sender_id === user?.id}
-            isGroup={chat.type === 'group'}
-            replyMsg={m.reply_to_id ? messagesMap.get(m.reply_to_id) : null}
-            onReply={() => { setReplyTo(m); setEditingMsg(null); inputRef.current?.focus() }}
-            onEdit={() => startEdit(m)}
-            onDelete={() => handleDelete(m)}
-            t={t}
-          />
-        ))}
+        {messages.map((m, idx) => {
+          const prevMsg = messages[idx - 1]
+          const showDate = !prevMsg || !isSameDay(prevMsg.created_at, m.created_at)
+          return (
+            <div key={m.id}>
+              {showDate && <DateSeparator label={formatDate(m.created_at, t)} />}
+              <MessageBubble
+                msg={m}
+                mine={m.sender_id === user?.id}
+                isGroup={chat.type === 'group'}
+                replyMsg={m.reply_to_id ? messagesMap.get(m.reply_to_id) : null}
+                onReply={() => { setReplyTo(m); setEditingMsg(null); inputRef.current?.focus() }}
+                onEdit={() => startEdit(m)}
+                onDelete={() => handleDelete(m)}
+                onCopy={() => navigator.clipboard.writeText(m.text).catch(() => {})}
+                onForward={() => setForwardMsg(m)}
+                onAvatarClick={(uid) => setProfileUserId(uid)}
+                t={t}
+                isDesktop={isDesktop}
+              />
+            </div>
+          )
+        })}
 
         {/* Typing indicator */}
         {typingUserIds.length > 0 && (
@@ -379,11 +663,32 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
           </div>
         )}
         <div ref={messagesEndRef} />
+
+        {/* Scroll to bottom button */}
+        {!atBottom && (
+          <button
+            onClick={scrollToBottom}
+            style={{
+              position: 'sticky', bottom: '0.75rem', alignSelf: 'flex-end',
+              width: 40, height: 40, borderRadius: '50%',
+              background: 'var(--surface)', border: '1.5px solid var(--border)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              cursor: 'pointer', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 10,
+            }}
+          >
+            {newMsgCount > 0 && (
+              <span style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 9, background: 'var(--gradient)', color: 'white', fontSize: '0.6rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                {newMsgCount}
+              </span>
+            )}
+            <ChevronDown size={18} />
+          </button>
+        )}
       </div>
 
       {/* Input area */}
-      <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        {/* Reply / edit bar */}
+      <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', flexShrink: 0, paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}>
         {(replyTo || editingMsg) && (
           <div className="reply-bar">
             {replyTo && <><Reply size={14} color="var(--primary)" /><span style={{ flex: 1 }}><strong>{t.replyingTo}:</strong> {replyTo.text}</span></>}
@@ -394,7 +699,7 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.875rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.875rem', position: 'relative' }}>
           <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileUpload} />
           <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '0.25rem' }}
             onClick={() => fileInputRef.current?.click()}
@@ -402,7 +707,7 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
             {uploading ? <span className="spinner-primary" style={{ width: 18, height: 18 }} /> : <Paperclip size={20} />}
           </button>
 
-          <div style={{ flex: 1, background: 'var(--input-bg)', borderRadius: 'var(--radius-full)', padding: '0.45rem 0.875rem', display: 'flex', alignItems: 'center' }}>
+          <div style={{ flex: 1, background: 'var(--input-bg)', borderRadius: 'var(--radius-full)', padding: '0.45rem 0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
             <input
               ref={inputRef}
               className="input-bare"
@@ -411,6 +716,17 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
               onChange={(e) => { setMessage(e.target.value); handleTyping() }}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             />
+            <button
+              onClick={() => setShowEmojiPicker((s) => !s)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '0.1rem', flexShrink: 0 }}
+            >
+              <Smile size={18} />
+            </button>
+            {showEmojiPicker && (
+              <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: 4 }}>
+                <EmojiPicker onSelect={(e) => setMessage((m) => m + e)} onClose={() => setShowEmojiPicker(false)} />
+              </div>
+            )}
           </div>
 
           {message.trim() || editingMsg ? (
@@ -424,12 +740,33 @@ function ChatView({ chat, onBack, isDesktop }: { chat: ChatSummary; onBack: () =
           )}
         </div>
       </div>
+
+      {/* Overlays */}
+      {showGroupInfo && (
+        <GroupInfoPanel
+          chatId={chat.id}
+          onClose={() => setShowGroupInfo(false)}
+          onDeleted={() => { setShowGroupInfo(false); onChatDeleted() }}
+        />
+      )}
+      {profileUserId && (
+        <UserProfileCard userId={profileUserId} onClose={() => setProfileUserId(null)} />
+      )}
+      {forwardMsg && (
+        <ForwardModal
+          chats={allChats.filter((c) => c.id !== chat.id)}
+          onForward={(chatId) => handleForwardSend(chatId, forwardMsg.text)}
+          onClose={() => setForwardMsg(null)}
+        />
+      )}
     </div>
   )
 }
 
 /* ── Chat list panel ─────────────────────────────────────────── */
-function ChatListPanel({ onOpen, openChatId }: { onOpen: (chat: ChatSummary) => void; openChatId: string | null }) {
+function ChatListPanel({ onOpen, openChatId, onChatsLoaded }: {
+  onOpen: (chat: ChatSummary) => void; openChatId: string | null; onChatsLoaded?: (chats: ChatSummary[]) => void
+}) {
   const { t } = useSettingsStore()
   const [chats, setChats] = useState<ChatSummary[]>([])
   const [search, setSearch] = useState('')
@@ -439,10 +776,12 @@ function ChatListPanel({ onOpen, openChatId }: { onOpen: (chat: ChatSummary) => 
   const load = useCallback(async () => {
     try {
       const data = await listChats()
-      setChats(data.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()))
+      const sorted = data.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      setChats(sorted)
+      onChatsLoaded?.(sorted)
     } catch { /* silently fail */ }
     finally { setLoading(false) }
-  }, [])
+  }, [onChatsLoaded])
 
   useEffect(() => { load() }, [load])
 
@@ -473,7 +812,6 @@ function ChatListPanel({ onOpen, openChatId }: { onOpen: (chat: ChatSummary) => 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
-      {/* Header */}
       <div style={{ padding: '1rem 1rem 0.75rem', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text)' }}>{t.chats}</h1>
@@ -487,7 +825,6 @@ function ChatListPanel({ onOpen, openChatId }: { onOpen: (chat: ChatSummary) => 
         </div>
       </div>
 
-      {/* List */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading && (
           <div style={{ padding: '1rem' }}>
@@ -553,6 +890,7 @@ export default function ChatsPage() {
   const { t } = useSettingsStore()
   const isDesktop = useIsDesktop()
   const [localChat, setLocalChat] = useState<ChatSummary | null>(null)
+  const [allChats, setAllChats] = useState<ChatSummary[]>([])
 
   const openChat = localChat
 
@@ -566,16 +904,20 @@ export default function ChatsPage() {
     setOpenChat(null)
   }
 
-  /* Desktop: split view */
+  const handleChatDeleted = () => {
+    setLocalChat(null)
+    setOpenChat(null)
+  }
+
   if (isDesktop) {
     return (
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
         <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid var(--border)' }}>
-          <ChatListPanel onOpen={handleOpen} openChatId={openChatId} />
+          <ChatListPanel onOpen={handleOpen} openChatId={openChatId} onChatsLoaded={setAllChats} />
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {openChat ? (
-            <ChatView chat={openChat} onBack={handleBack} isDesktop={true} />
+            <ChatView chat={openChat} allChats={allChats} onBack={handleBack} isDesktop={true} onChatDeleted={handleChatDeleted} />
           ) : (
             <div className="empty-state" style={{ height: '100%' }}>
               <div className="empty-state-icon">
@@ -592,10 +934,9 @@ export default function ChatsPage() {
     )
   }
 
-  /* Mobile: switch between list and chat */
   if (openChat) {
-    return <ChatView chat={openChat} onBack={handleBack} isDesktop={false} />
+    return <ChatView chat={openChat} allChats={allChats} onBack={handleBack} isDesktop={false} onChatDeleted={handleChatDeleted} />
   }
 
-  return <ChatListPanel onOpen={handleOpen} openChatId={null} />
+  return <ChatListPanel onOpen={handleOpen} openChatId={null} onChatsLoaded={setAllChats} />
 }

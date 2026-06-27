@@ -16,8 +16,35 @@ export const createGroupChat = (title: string, member_ids: string[], avatar_url?
     body: JSON.stringify({ title, member_ids, avatar_url: avatar_url ?? null }),
   })
 
+export const updateGroupChat = (chat_id: string, title?: string, avatar_url?: string) =>
+  apiFetch<ChatDetail>(`/chats/${chat_id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title: title ?? null, avatar_url: avatar_url ?? null }),
+  })
+
+export const deleteGroupChat = (chat_id: string) =>
+  apiFetch<void>(`/chats/${chat_id}`, { method: 'DELETE' })
+
+export const leaveGroupChat = (chat_id: string) =>
+  apiFetch<void>(`/chats/${chat_id}/leave`, { method: 'POST' })
+
 export const getChatDetail = (chat_id: string) =>
   apiFetch<ChatDetail>(`/chats/${chat_id}`)
+
+export const addChatMember = (chat_id: string, user_id: string) =>
+  apiFetch<ChatDetail>(`/chats/${chat_id}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id, role: 'member' }),
+  })
+
+export const removeChatMember = (chat_id: string, user_id: string) =>
+  apiFetch<ChatDetail>(`/chats/${chat_id}/members/${user_id}`, { method: 'DELETE' })
+
+export const updateMemberRole = (chat_id: string, user_id: string, role: 'admin' | 'member') =>
+  apiFetch<ChatDetail>(`/chats/${chat_id}/members/${user_id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  })
 
 export const getMessages = (chat_id: string, limit = 50, before_message_id?: string) => {
   const params = new URLSearchParams({ limit: String(limit) })

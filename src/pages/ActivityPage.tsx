@@ -35,23 +35,29 @@ function groupByDate(items: NotificationPublic[]) {
   return { today, yesterday, earlier }
 }
 
-function NotifItem({ item, onDelete, onRead, t }: {
+function NotifItem({ item, onDelete, onRead, onNavigate, t }: {
   item: NotificationPublic
   onDelete: (id: string) => void
   onRead: (id: string) => void
+  onNavigate: (item: NotificationPublic) => void
   t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']
 }) {
   const name = item.actor?.display_name ?? 'MiZumBA'
   const av = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
+  const handleClick = () => {
+    if (!item.is_read) onRead(item.id)
+    onNavigate(item)
+  }
+
   return (
     <div
-      onClick={() => !item.is_read && onRead(item.id)}
+      onClick={handleClick}
       style={{
         padding: '0.875rem 1rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
         background: item.is_read ? 'var(--surface)' : 'rgba(132,36,123,0.04)',
         borderBottom: '1px solid var(--border)',
-        cursor: item.is_read ? 'default' : 'pointer',
+        cursor: 'pointer',
         transition: 'background var(--duration) var(--ease)',
       }}
     >
@@ -80,7 +86,7 @@ function NotifItem({ item, onDelete, onRead, t }: {
 }
 
 export default function ActivityPage() {
-  const { setUnreadNotifications } = useAppStore()
+  const { setUnreadNotifications, setOpenChat, setOpenChannel, setPage } = useAppStore()
   const { t } = useSettingsStore()
   const [notifications, setNotifications] = useState<NotificationPublic[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -131,12 +137,18 @@ export default function ActivityPage() {
     }
   }
 
+  const handleNavigate = (item: NotificationPublic) => {
+    const payload = item.payload as { chat_id?: string; channel_id?: string } | null
+    if (payload?.chat_id) { setOpenChat(payload.chat_id); setPage('chats') }
+    else if (payload?.channel_id) { setOpenChannel(payload.channel_id); setPage('channels') }
+  }
+
   const { today, yesterday, earlier } = groupByDate(notifications)
 
   const Group = ({ label, items }: { label: string; items: NotificationPublic[] }) => items.length === 0 ? null : (
     <div>
       <div className="section-label" style={{ padding: '0.75rem 1rem 0.25rem' }}>{label}</div>
-      {items.map((n) => <NotifItem key={n.id} item={n} onDelete={handleDelete} onRead={handleRead} t={t} />)}
+      {items.map((n) => <NotifItem key={n.id} item={n} onDelete={handleDelete} onRead={handleRead} onNavigate={handleNavigate} t={t} />)}
     </div>
   )
 

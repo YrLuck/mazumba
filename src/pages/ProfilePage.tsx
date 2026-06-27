@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronRight, Bell, Shield, Palette, Camera, Pencil, LogOut, X, Check, UserX } from 'lucide-react'
+import { ChevronRight, Bell, Shield, Palette, Camera, Pencil, LogOut, X, Check, UserX, Lock } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { useSettingsStore } from '../store/useSettingsStore'
 import { getMyProfile } from '../api/users'
@@ -78,6 +78,7 @@ export default function ProfilePage() {
     { icon: <Shield size={18} color="white" />, bg: '#84247B', label: t.privacySettings, desc: t.privacyDesc, page: 'settings-privacy' as const },
     { icon: <Palette size={18} color="white" />, bg: '#7c4dff', label: t.appearanceSettings, desc: t.appearanceDesc, page: 'settings-appearance' as const },
     { icon: <UserX size={18} color="white" />, bg: '#e53935', label: t.blockedUsers, desc: t.blockedDesc, page: 'settings-blocked' as const },
+    { icon: <Lock size={18} color="white" />, bg: '#f59e0b', label: t.changePassword, desc: t.changePasswordDesc, page: 'settings-password' as const },
   ]
 
   return (
