@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Plus, Hash, Users, ChevronLeft, Send, MoreVertical, Edit2, Trash2, X, Check } from 'lucide-react'
 import CreateChatModal from '../components/CreateChatModal'
 import type { Translations } from '../i18n/en'
-import { listChannels, subscribeChannel, unsubscribeChannel, getChannelPosts, createPost, updateChannel, deleteChannel, editPost, deletePost } from '../api/channels'
+import { listChannels, subscribeChannel, unsubscribeChannel, getChannelPosts, createPost, updateChannel, deleteChannel, editPost, deletePost, getChannel } from '../api/channels'
 import type { ChannelSummary, ChannelPostPublic } from '../types/api'
 import { useAppStore } from '../store/useAppStore'
 import { useSettingsStore } from '../store/useSettingsStore'
@@ -115,7 +115,9 @@ function ChannelView({
     try {
       await deleteChannel(channel.id)
       onChannelDeleted()
-    } catch { /* ignore */ }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete channel')
+    }
   }
 
   return (
@@ -289,7 +291,7 @@ function ChannelView({
 }
 
 /* ── Channel list panel ──────────────────────────────────────── */
-function ChannelListPanel({ onOpen, openChannelId }: { onOpen: (ch: ChannelSummary) => void; openChannelId: string | null }) {
+function ChannelListPanel({ onOpen, openChannelId, refreshTrigger }: { onOpen: (ch: ChannelSummary) => void; openChannelId: string | null; refreshTrigger?: number }) {
   const { t } = useSettingsStore()
   const [channels, setChannels] = useState<ChannelSummary[]>([])
   const [search, setSearch] = useState('')
@@ -305,7 +307,7 @@ function ChannelListPanel({ onOpen, openChannelId }: { onOpen: (ch: ChannelSumma
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, refreshTrigger])
   useEffect(() => {
     const timeout = setTimeout(() => load(search || undefined), 400)
     return () => clearTimeout(timeout)
@@ -419,6 +421,13 @@ export default function ChannelsPage() {
   const { t } = useSettingsStore()
   const isDesktop = useIsDesktop()
   const [localChannel, setLocalChannel] = useState<ChannelSummary | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  useEffect(() => {
+    if (!openChannelId) return
+    if (localChannel?.id === openChannelId) return
+    getChannel(openChannelId).then((ch) => setLocalChannel(ch as ChannelSummary)).catch(() => {})
+  }, [openChannelId, localChannel?.id])
 
   const handleOpen = (ch: ChannelSummary) => {
     setLocalChannel(ch)
@@ -433,13 +442,14 @@ export default function ChannelsPage() {
   const handleChannelDeleted = () => {
     setLocalChannel(null)
     setOpenChannel(null)
+    setRefreshTrigger((n) => n + 1)
   }
 
   if (isDesktop) {
     return (
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
         <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid var(--border)' }}>
-          <ChannelListPanel onOpen={handleOpen} openChannelId={openChannelId} />
+          <ChannelListPanel onOpen={handleOpen} openChannelId={openChannelId} refreshTrigger={refreshTrigger} />
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {localChannel ? (
@@ -464,5 +474,5 @@ export default function ChannelsPage() {
     return <ChannelView channel={localChannel} onBack={handleBack} isDesktop={false} onChannelDeleted={handleChannelDeleted} />
   }
 
-  return <ChannelListPanel onOpen={handleOpen} openChannelId={null} />
+  return <ChannelListPanel onOpen={handleOpen} openChannelId={null} refreshTrigger={refreshTrigger} />
 }

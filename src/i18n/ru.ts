@@ -222,6 +222,9 @@ const ru: Translations = {
   // System theme
   systemTheme: 'Система',
   systemThemeDesc: 'Как на устройстве',
+
+  // Direct message
+  directMessage: 'Личное сообщение',
 }
 
 export default ru

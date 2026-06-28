@@ -33,10 +33,6 @@ export default function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
     <div
       ref={ref}
       style={{
-        position: 'absolute',
-        bottom: '100%',
-        left: 0,
-        marginBottom: 8,
         width: 300,
         maxHeight: 280,
         background: 'var(--surface)',

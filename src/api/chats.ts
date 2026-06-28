@@ -52,10 +52,23 @@ export const getMessages = (chat_id: string, limit = 50, before_message_id?: str
   return apiFetch<MessagePublic[]>(`/chats/${chat_id}/messages?${params}`)
 }
 
-export const sendMessageRest = (chat_id: string, text: string, reply_to_id?: string) =>
+export const sendMessageRest = (
+  chat_id: string,
+  text: string,
+  reply_to_id?: string,
+  attachment?: { url: string; mime_type: string; name: string; size: number; type: string },
+) =>
   apiFetch<MessagePublic>(`/chats/${chat_id}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ text, type: 'text', reply_to_id: reply_to_id ?? null }),
+    body: JSON.stringify({
+      text,
+      type: attachment?.type ?? 'text',
+      reply_to_id: reply_to_id ?? null,
+      attachment_url: attachment?.url ?? null,
+      attachment_mime_type: attachment?.mime_type ?? null,
+      attachment_name: attachment?.name ?? null,
+      attachment_size: attachment?.size ?? null,
+    }),
   })
 
 export const markRead = (chat_id: string, message_id?: string) =>

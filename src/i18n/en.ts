@@ -220,6 +220,9 @@ const en = {
   // System theme
   systemTheme: 'System',
   systemThemeDesc: 'Follow device setting',
+
+  // Direct message
+  directMessage: 'Direct Message',
 }
 
 export type Translations = typeof en

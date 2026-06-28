@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Search, Plus, Mic, MicOff, Send, Paperclip,
+  Search, Plus, Mic, Send, Paperclip,
   ChevronLeft, MoreVertical, Edit2, Trash2, Reply,
   Smile, X, Check, CheckCheck, Copy, Forward,
   ChevronDown,
@@ -10,7 +10,7 @@ import CreateChatModal from '../components/CreateChatModal'
 import GroupInfoPanel from '../components/GroupInfoPanel'
 import UserProfileCard from '../components/UserProfileCard'
 import EmojiPicker from '../components/EmojiPicker'
-import { listChats, getMessages, sendMessageRest, markRead } from '../api/chats'
+import { listChats, getMessages, sendMessageRest, markRead, getChatDetail } from '../api/chats'
 import { editMessage, deleteMessage, addReaction } from '../api/messages'
 import { uploadFile } from '../api/files'
 import { socket } from '../ws/socket'
@@ -55,6 +55,12 @@ function formatDate(iso: string, t: Translations) {
 function isSameDay(a: string, b: string) {
   const da = new Date(a), db = new Date(b)
   return da.getDate() === db.getDate() && da.getMonth() === db.getMonth() && da.getFullYear() === db.getFullYear()
+}
+
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉']
@@ -254,6 +260,13 @@ function MessageBubble({
                     onClick={(e) => { e.stopPropagation(); setLightboxSrc(msg.attachment_url!) }}
                     style={{ maxWidth: 200, maxHeight: 200, borderRadius: 'var(--radius-xs)', display: 'block', cursor: 'zoom-in' }}
                   />
+                ) : (msg.attachment_mime_type?.startsWith('audio/') || msg.type === 'audio') ? (
+                  <audio
+                    controls
+                    src={msg.attachment_url}
+                    style={{ maxWidth: 220, display: 'block', borderRadius: 4, height: 36 }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
                 ) : (
                   <a href={msg.attachment_url} target="_blank" rel="noreferrer" style={{ color: 'inherit', opacity: 0.85, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     <Paperclip size={12} /> {msg.attachment_name ?? 'File'}
@@ -349,6 +362,7 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
   const [messagesMap, setMessagesMap] = useState<Map<string, MessagePublic>>(new Map())
   const [message, setMessage] = useState(drafts.get(chat.id) ?? '')
   const [recording, setRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [hasMore, setHasMore] = useState(true)
@@ -367,6 +381,9 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const typingUserIds = useTypingUsers(chat.id)
   const prevChatId = useRef<string | null>(null)
 
@@ -438,6 +455,17 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
   useEffect(() => {
     if (atBottom) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [typingUserIds.length, atBottom])
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.ondataavailable = null
+        mediaRecorderRef.current.onstop = null
+        mediaRecorderRef.current.stop()
+      }
+    }
+  }, [])
 
   const handleScroll = () => {
     const el = scrollRef.current
@@ -526,14 +554,18 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
     setUploading(true)
     try {
       const uploaded = await uploadFile(file)
+      const msgType = file.type.startsWith('image/') ? 'image' : 'file'
       const sent = socket.send('message.send', {
-        chat_id: chat.id, text: '', type: file.type.startsWith('image/') ? 'image' : 'file',
+        chat_id: chat.id, text: '', type: msgType,
         attachment_url: uploaded.url, attachment_mime_type: uploaded.mime_type,
         attachment_name: uploaded.original_filename, attachment_size: uploaded.size_bytes,
         reply_to_id: null,
       })
       if (!sent) {
-        const msg = await sendMessageRest(chat.id, uploaded.original_filename, undefined)
+        const msg = await sendMessageRest(chat.id, '', undefined, {
+          url: uploaded.url, mime_type: uploaded.mime_type,
+          name: uploaded.original_filename, size: uploaded.size_bytes, type: msgType,
+        })
         setMessages((prev) => [...prev, msg])
       }
     } catch { /* silently fail */ }
@@ -560,6 +592,62 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
 
   const cancelEdit = () => { setEditingMsg(null); setMessage('') }
   const cancelReply = () => setReplyTo(null)
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg'
+      const recorder = new MediaRecorder(stream, { mimeType })
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop())
+        if (audioChunksRef.current.length === 0) return
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
+        const ext = mimeType.includes('ogg') ? 'ogg' : 'webm'
+        const baseMime = mimeType.split(';')[0]
+        const file = new File([blob], `voice.${ext}`, { type: baseMime })
+        setUploading(true)
+        try {
+          const uploaded = await uploadFile(file)
+          socket.send('message.send', {
+            chat_id: chat.id, text: '', type: 'audio',
+            attachment_url: uploaded.url, attachment_mime_type: uploaded.mime_type,
+            attachment_name: uploaded.original_filename, attachment_size: uploaded.size_bytes,
+            reply_to_id: null,
+          })
+        } catch { /* ignore */ }
+        finally { setUploading(false) }
+      }
+      recorder.start(100)
+      setRecording(true)
+      setRecordingTime(0)
+      recordingTimerRef.current = setInterval(() => setRecordingTime((n) => n + 1), 1000)
+    } catch { /* user denied permission */ }
+  }
+
+  const stopRecording = () => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
+    mediaRecorderRef.current = null
+    setRecording(false)
+    setRecordingTime(0)
+  }
+
+  const cancelRecording = () => {
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.ondataavailable = null
+      mediaRecorderRef.current.onstop = null
+      if (mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+    }
+    audioChunksRef.current = []
+    setRecording(false)
+    setRecordingTime(0)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
@@ -655,14 +743,6 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
           </div>
         )}
 
-        {recording && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <div style={{ padding: '0.6rem 0.875rem', borderRadius: '1rem 1rem 0.2rem 1rem', background: 'linear-gradient(135deg, #8EEBF2 0%, #84247B 100%)', color: 'white', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'white', animation: 'pulse-ring 1s infinite', display: 'inline-block' }} />
-              {t.recording}
-            </div>
-          </div>
-        )}
         <div ref={messagesEndRef} />
 
         {/* Scroll to bottom button */}
@@ -734,9 +814,23 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
             <button className="voice-btn" onClick={handleSend} disabled={sending}>
               {editingMsg ? <Check size={18} /> : <Send size={18} />}
             </button>
+          ) : recording ? (
+            <>
+              <span style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, minWidth: 36, textAlign: 'center' }}>{formatDuration(recordingTime)}</span>
+              <button
+                className="voice-btn"
+                onClick={cancelRecording}
+                style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1.5px solid rgba(239,68,68,0.3)' }}
+              >
+                <X size={16} />
+              </button>
+              <button className="voice-btn recording" onClick={stopRecording}>
+                <Check size={16} />
+              </button>
+            </>
           ) : (
-            <button className={`voice-btn${recording ? ' recording' : ''}`} onClick={() => setRecording(!recording)}>
-              {recording ? <MicOff size={18} /> : <Mic size={18} />}
+            <button className="voice-btn" onClick={startRecording}>
+              <Mic size={18} />
             </button>
           )}
         </div>
@@ -765,8 +859,8 @@ function ChatView({ chat, allChats, onBack, isDesktop, onChatDeleted }: {
 }
 
 /* ── Chat list panel ─────────────────────────────────────────── */
-function ChatListPanel({ onOpen, openChatId, onChatsLoaded }: {
-  onOpen: (chat: ChatSummary) => void; openChatId: string | null; onChatsLoaded?: (chats: ChatSummary[]) => void
+function ChatListPanel({ onOpen, openChatId, onChatsLoaded, onOpenChat }: {
+  onOpen: (chat: ChatSummary) => void; openChatId: string | null; onChatsLoaded?: (chats: ChatSummary[]) => void; onOpenChat?: (chatId: string) => void
 }) {
   const { t } = useSettingsStore()
   const [chats, setChats] = useState<ChatSummary[]>([])
@@ -803,6 +897,14 @@ function ChatListPanel({ onOpen, openChatId, onChatsLoaded }: {
           const exists = prev.some((c) => c.id === chat.id)
           const updated = exists ? prev.map((c) => c.id === chat.id ? chat : c) : [chat, ...prev]
           return updated.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        })
+      }
+      if (ev.type === 'chat.created') {
+        const chat = ev.payload.chat as ChatSummary
+        setChats((prev) => {
+          const exists = prev.some((c) => c.id === chat.id)
+          if (exists) return prev
+          return [chat, ...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
         })
       }
     })
@@ -880,7 +982,12 @@ function ChatListPanel({ onOpen, openChatId, onChatsLoaded }: {
         ))}
       </div>
 
-      {showModal && <CreateChatModal onClose={() => { setShowModal(false); load() }} />}
+      {showModal && (
+        <CreateChatModal
+          onClose={() => { setShowModal(false); load() }}
+          onCreated={(chatId) => { load(); onOpenChat?.(chatId) }}
+        />
+      )}
     </div>
   )
 }
@@ -892,6 +999,14 @@ export default function ChatsPage() {
   const isDesktop = useIsDesktop()
   const [localChat, setLocalChat] = useState<ChatSummary | null>(null)
   const [allChats, setAllChats] = useState<ChatSummary[]>([])
+
+  useEffect(() => {
+    if (!openChatId) return
+    if (localChat?.id === openChatId) return
+    const found = allChats.find((c) => c.id === openChatId)
+    if (found) { setLocalChat(found); return }
+    getChatDetail(openChatId).then((d) => setLocalChat(d as ChatSummary)).catch(() => {})
+  }, [openChatId, localChat?.id, allChats])
 
   const openChat = localChat
 
@@ -914,7 +1029,7 @@ export default function ChatsPage() {
     return (
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
         <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid var(--border)' }}>
-          <ChatListPanel onOpen={handleOpen} openChatId={openChatId} onChatsLoaded={setAllChats} />
+          <ChatListPanel onOpen={handleOpen} openChatId={openChatId} onChatsLoaded={setAllChats} onOpenChat={(chatId) => setOpenChat(chatId)} />
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {openChat ? (
@@ -939,5 +1054,5 @@ export default function ChatsPage() {
     return <ChatView chat={openChat} allChats={allChats} onBack={handleBack} isDesktop={false} onChatDeleted={handleChatDeleted} />
   }
 
-  return <ChatListPanel onOpen={handleOpen} openChatId={null} onChatsLoaded={setAllChats} />
+  return <ChatListPanel onOpen={handleOpen} openChatId={null} onChatsLoaded={setAllChats} onOpenChat={(chatId) => setOpenChat(chatId)} />
 }
