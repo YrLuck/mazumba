@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Bell, CheckCheck, Trash2 } from 'lucide-react'
+import type { Translations } from '../i18n/en'
 import { listNotifications, markAllRead, deleteNotification, markNotificationRead } from '../api/notifications'
 import { socket } from '../ws/socket'
 import type { NotificationPublic } from '../types/api'
 import { useAppStore } from '../store/useAppStore'
 import { useSettingsStore } from '../store/useSettingsStore'
 
-function initials(name: string) {
-  return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-}
 
-function formatTime(iso: string, t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']) {
+function formatTime(iso: string, t: Translations) {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
@@ -40,7 +38,7 @@ function NotifItem({ item, onDelete, onRead, onNavigate, t }: {
   onDelete: (id: string) => void
   onRead: (id: string) => void
   onNavigate: (item: NotificationPublic) => void
-  t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']
+  t: Translations
 }) {
   const name = item.actor?.display_name ?? 'MiZumBA'
   const av = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()

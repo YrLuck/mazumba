@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Plus, Hash, Users, ChevronLeft, Send, MoreVertical, Edit2, Trash2, X, Check } from 'lucide-react'
 import CreateChatModal from '../components/CreateChatModal'
+import type { Translations } from '../i18n/en'
 import { listChannels, subscribeChannel, unsubscribeChannel, getChannelPosts, createPost, updateChannel, deleteChannel, editPost, deletePost } from '../api/channels'
 import type { ChannelSummary, ChannelPostPublic } from '../types/api'
 import { useAppStore } from '../store/useAppStore'
@@ -11,7 +12,7 @@ function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
-function formatTime(iso: string, t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']) {
+function formatTime(iso: string, t: Translations) {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()

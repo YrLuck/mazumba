@@ -5,6 +5,7 @@ import {
   Smile, X, Check, CheckCheck, Copy, Forward,
   ChevronDown,
 } from 'lucide-react'
+import type { Translations } from '../i18n/en'
 import CreateChatModal from '../components/CreateChatModal'
 import GroupInfoPanel from '../components/GroupInfoPanel'
 import UserProfileCard from '../components/UserProfileCard'
@@ -31,7 +32,7 @@ function avatarColor(id: string) {
   return COLORS[h % COLORS.length]
 }
 
-function formatTime(iso: string, t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']) {
+function formatTime(iso: string, t: Translations) {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
@@ -42,7 +43,7 @@ function formatTime(iso: string, t: ReturnType<typeof import('../store/useSettin
   return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
-function formatDate(iso: string, t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']) {
+function formatDate(iso: string, t: Translations) {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
@@ -128,7 +129,7 @@ function MessageBubble({
   replyMsg?: MessagePublic | null; onReply: () => void; onEdit: () => void;
   onDelete: () => void; onCopy: () => void; onForward: () => void;
   onAvatarClick?: (userId: string) => void;
-  t: ReturnType<typeof import('../store/useSettingsStore').useSettingsStore>['t']
+  t: Translations
   isDesktop: boolean
 }) {
   const [showCtx, setShowCtx] = useState(false)

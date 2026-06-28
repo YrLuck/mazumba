@@ -8,12 +8,9 @@ import { uploadAvatar } from '../api/files'
 import { logout as apiLogout } from '../api/auth'
 import { socket } from '../ws/socket'
 import type { ProfileStats } from '../types/api'
-import { useIsDesktop } from '../hooks/useIsDesktop'
-
 export default function ProfilePage() {
   const { user, setUser, setPage, logout } = useAppStore()
   const { t } = useSettingsStore()
-  const isDesktop = useIsDesktop()
   const [stats, setStats] = useState<ProfileStats>({ messages_count: 0, groups_count: 0, channels_count: 0 })
   const [editing, setEditing] = useState(false)
   const [displayName, setDisplayName] = useState('')

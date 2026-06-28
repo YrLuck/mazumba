@@ -158,7 +158,7 @@ export default function App() {
   /* ── Auth pages ─────────────────────────────────────────────── */
   if (isAuthPage) {
     return (
-      <div style={{ height: '100vh', height: '100dvh' as string, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: '100dvh' as string, display: 'flex', flexDirection: 'column' }}>
         <div key={page} className="page-enter" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <PageRenderer page={page} />
         </div>
@@ -172,7 +172,6 @@ export default function App() {
       <div style={{
         maxWidth: 480,
         margin: '0 auto',
-        height: '100vh',
         height: '100dvh' as string,
         background: 'var(--bg)',
         overflow: 'hidden',
@@ -193,7 +192,6 @@ export default function App() {
   return (
     <div style={{
       display: 'flex',
-      height: '100vh',
       height: '100dvh' as string,
       background: 'var(--bg)',
       overflow: 'hidden',

@@ -109,7 +109,7 @@ export default function LoginPage() {
 
   /* ── Mobile: gradient header + bottom card ─────────────────── */
   return (
-    <div style={{ minHeight: '100vh', minHeight: '100dvh' as string, display: 'flex', flexDirection: 'column' }} className="page-bg">
+    <div style={{ minHeight: '100dvh' as string, display: 'flex', flexDirection: 'column' }} className="page-bg">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem 2rem' }}>
         <div className="fade-up" style={{ background: 'rgba(255,255,255,0.55)', borderRadius: 'var(--radius-lg)', padding: '1rem', marginBottom: '1rem', backdropFilter: 'blur(12px)', boxShadow: '0 4px 24px rgba(132,36,123,0.12)' }}>
           <Logo size={56} />

@@ -220,7 +220,7 @@ const en = {
   // System theme
   systemTheme: 'System',
   systemThemeDesc: 'Follow device setting',
-} as const
+}
 
 export type Translations = typeof en
 export default en

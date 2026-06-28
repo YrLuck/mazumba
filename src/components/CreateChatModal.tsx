@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Users, Hash, Lock, Search, UserPlus } from 'lucide-react'
+import { X, Users, Hash, Lock, UserPlus } from 'lucide-react'
 import { createGroupChat } from '../api/chats'
 import { createChannel } from '../api/channels'
 import { searchUsers } from '../api/users'

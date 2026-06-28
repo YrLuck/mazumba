@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { X, Crown, Shield, User, Trash2, UserPlus, LogOut, Edit2, Check } from 'lucide-react'
+import { X, Shield, User, Trash2, UserPlus, LogOut, Edit2, Check } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { useSettingsStore } from '../store/useSettingsStore'
 import { getChatDetail, updateGroupChat, deleteGroupChat, leaveGroupChat, addChatMember, removeChatMember, updateMemberRole } from '../api/chats'
@@ -21,7 +21,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function GroupInfoPanel({ chatId, onClose, onDeleted }: Props) {
-  const { user: me, setPage, setOpenChat } = useAppStore()
+  const { user: me } = useAppStore()
   const { t } = useSettingsStore()
   const [chat, setChat] = useState<ChatDetail | null>(null)
   const [loading, setLoading] = useState(true)

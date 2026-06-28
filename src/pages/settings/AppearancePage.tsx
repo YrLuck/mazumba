@@ -9,22 +9,6 @@ export default function AppearancePage() {
   const { theme, setTheme, lang, setLang, t } = useSettingsStore()
   const isDesktop = useIsDesktop()
 
-  const Row = ({ label, desc, right }: { label: string; desc?: string; right: React.ReactNode }) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.875rem 1rem', borderBottom: '1px solid var(--border)' }}>
-      <div>
-        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>{label}</div>
-        {desc && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>{desc}</div>}
-      </div>
-      {right}
-    </div>
-  )
-
-  const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
-    <button className={`toggle-track ${on ? 'on' : 'off'}`} onClick={onToggle}>
-      <span className="toggle-thumb" />
-    </button>
-  )
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
       <div style={{ padding: '1rem 1.25rem', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
